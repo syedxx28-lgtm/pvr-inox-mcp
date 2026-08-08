@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-showwatch - watch cinema booking APIs and shout the moment something opens.
+pvr-inox-mcp - watch PVR/INOX booking APIs and shout the moment something opens.
 
 Polls a cinema's showtime API across a forward date window and diffs the result
 against the last run. Three things are worth waking up for:

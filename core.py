@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-showwatch core - a stdlib-only client for the PVR/INOX booking API.
+pvr-inox core - a stdlib-only client for the PVR/INOX booking API.
 
 Everything here works for any of the ~116 cities the chain serves, not just
 the one the watcher happens to be configured for. Two findings drive the

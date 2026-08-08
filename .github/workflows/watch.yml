@@ -1,4 +1,4 @@
-name: showwatch
+name: pvr-inox watch
 
 on:
   schedule:
@@ -9,7 +9,7 @@ on:
 
 # state.json is committed back each run, so two overlapping runs would race.
 concurrency:
-  group: showwatch
+  group: pvr-inox-watch
   cancel-in-progress: false
 
 permissions:
@@ -48,8 +48,8 @@ jobs:
       - name: Persist state
         run: |
           if [ -n "$(git status --porcelain state.json)" ]; then
-            git config user.name  "showwatch"
-            git config user.email "showwatch@users.noreply.github.com"
+            git config user.name  "pvr-inox-watch"
+            git config user.email "pvr-inox-watch@users.noreply.github.com"
             git add state.json
             git commit -m "state: $(date -u '+%Y-%m-%d %H:%M UTC')"
             # Another run may have pushed while this one polled.

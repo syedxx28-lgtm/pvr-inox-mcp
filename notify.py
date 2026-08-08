@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Notification channels for showwatch. Stdlib only.
+Notification channels for pvr-inox-mcp. Stdlib only.
 
 Channels configure themselves from environment variables, and every one that
 is configured gets the alert. Nothing to edit in code: set the variables for
@@ -163,7 +163,7 @@ def _github_issue(title, body, url, priority=5):
         {
             "Authorization": "Bearer %s" % token,
             "Accept": "application/vnd.github+json",
-            "User-Agent": "showwatch",
+            "User-Agent": "pvr-inox-mcp",
         },
     )
     return True

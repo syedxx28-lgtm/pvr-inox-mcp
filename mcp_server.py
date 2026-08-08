@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-showwatch MCP server. Thin stdio transport over core.py.
+PVR INOX MCP server. Thin stdio transport over core.py.
 
 All the logic lives in core, which is stdlib-only and drives the cron watcher
 too. This module only exposes it as MCP tools so any client can ask about
@@ -25,14 +25,14 @@ INSTRUCTIONS = """
 You can look up films, showtimes and live seat availability at any PVR or INOX
 cinema in India - about 116 cities.
 
-Typical flow: showwatch_cinemas to find the cinema id, then showwatch_seats to
-see what is actually bookable. showwatch_now_showing answers "what's on".
+Typical flow: pvr_cinemas to find the cinema id, then pvr_seats to
+see what is actually bookable. pvr_now_showing answers "what's on".
 
 Things that matter when answering:
 
 - SHOW-LEVEL STATUS IS MISLEADING. A show marked "Available" or "Filling Up
   Fast" is routinely stripped of every decent seat. Shows with 100+ free seats
-  have had zero free in the back-centre. Always check showwatch_seats before
+  have had zero free in the back-centre. Always check pvr_seats before
   telling someone a show is worth booking, and lead with the zone figure.
 
 - The "zone" is the good seats: the rows 60-85% of the way back, and the
@@ -57,10 +57,10 @@ Things that matter when answering:
   means genuinely adjacent, with aisles treated as breaks.
 
 You can also manage the cron watches that alert Slack when a booking window
-opens: showwatch_add_watch / showwatch_list_watches / showwatch_remove_watch.
+opens: pvr_add_watch / pvr_list_watches / pvr_remove_watch.
 
 Adding a watch only edits a local file. The cron runs the COMMITTED config, so
-nothing takes effect until showwatch_publish_watches pushes it. Always tell the
+nothing takes effect until pvr_publish_watches pushes it. Always tell the
 user a new watch is not live yet, and never publish unless they ask for it - it
 pushes to a public repository.
 
@@ -68,7 +68,7 @@ Every tool returns a compact table by default. Pass format="json" for the full
 structured result when you need to compute over it rather than report it.
 """
 
-mcp = FastMCP("showwatch", instructions=INSTRUCTIONS)
+mcp = FastMCP("pvr-inox", instructions=INSTRUCTIONS)
 
 # Everything here reads a public booking API and writes nothing.
 _LOOKUP = ToolAnnotations(
@@ -83,14 +83,14 @@ def _out(payload, text, fmt):
 
 
 @mcp.tool(annotations=_LOOKUP)
-def showwatch_cities() -> str:
+def pvr_cities() -> str:
     """List every city where PVR/INOX sells tickets."""
     cities = core.list_cities()
     return "%d cities:\n%s" % (len(cities), ", ".join(cities))
 
 
 @mcp.tool(annotations=_LOOKUP)
-def showwatch_cinemas(
+def pvr_cinemas(
     city: str, query: str = "", lat: str = "", lng: str = "", format: str = "text"
 ) -> str:
     """Cinemas in a city, busiest first. `query` filters on the name.
@@ -112,7 +112,7 @@ def showwatch_cinemas(
 
 
 @mcp.tool(annotations=_LOOKUP)
-def showwatch_now_showing(
+def pvr_now_showing(
     city: str, lat: str = "", lng: str = "", format: str = "text"
 ) -> str:
     """Films currently playing in a city, with certificate, length and formats."""
@@ -141,7 +141,7 @@ def showwatch_now_showing(
 
 
 @mcp.tool(annotations=_LOOKUP)
-def showwatch_showtimes(
+def pvr_showtimes(
     city: str,
     cinema_id: str,
     date: str,
@@ -190,12 +190,12 @@ def showwatch_showtimes(
                 s["status"],
             )
         )
-    lines.append("\nStatus is show-level and hides seat quality - use showwatch_seats.")
+    lines.append("\nStatus is show-level and hides seat quality - use pvr_seats.")
     return _out(shows, "\n".join(lines), format)
 
 
 @mcp.tool(annotations=_LOOKUP)
-def showwatch_seats(
+def pvr_seats(
     city: str,
     cinema_id: str,
     date: str,
@@ -280,7 +280,7 @@ def showwatch_seats(
 
 
 @mcp.tool(annotations=_LOOKUP)
-def showwatch_is_open(
+def pvr_is_open(
     city: str, cinema_id: str, date: str, lat: str = "", lng: str = ""
 ) -> str:
     """Is a date on sale yet at this cinema?
@@ -326,7 +326,7 @@ def _git(*args):
 
 
 @mcp.tool(annotations=_LOOKUP)
-def showwatch_list_watches() -> str:
+def pvr_list_watches() -> str:
     """The watches the cron currently runs, and whether each is live."""
     config = _load_watches()
     watches = config.get("watches") or []
@@ -351,13 +351,13 @@ def showwatch_list_watches() -> str:
     if dirty:
         lines.append(
             "\nwatches.json has uncommitted changes - the cron still runs the "
-            "committed version. Call showwatch_publish_watches to make it live."
+            "committed version. Call pvr_publish_watches to make it live."
         )
     return "\n".join(lines)
 
 
 @mcp.tool(annotations=_WRITES)
-def showwatch_add_watch(
+def pvr_add_watch(
     name: str,
     city: str,
     cinema: str,
@@ -383,7 +383,7 @@ def showwatch_add_watch(
     """
     matches = core.list_cinemas(city, query=cinema)
     if not matches:
-        return "No cinema matching %r in %s. Try showwatch_cinemas to see the list." % (
+        return "No cinema matching %r in %s. Try pvr_cinemas to see the list." % (
             cinema,
             city,
         )
@@ -448,13 +448,13 @@ def showwatch_add_watch(
             if hits
             else "\nWARNING: nothing matches %r%s at this cinema today. Fine if the "
             "film hasn't opened yet - otherwise check the spelling with "
-            "showwatch_showtimes." % (film, " in " + experience if experience else "")
+            "pvr_showtimes." % (film, " in " + experience if experience else "")
         )
 
     return (
         "Added %r: %s (cinema %s), %s%s.\n"
         "NOT LIVE YET - the cron runs the committed config. "
-        "Call showwatch_publish_watches to push it.%s"
+        "Call pvr_publish_watches to push it.%s"
         % (
             name,
             venue["name"],
@@ -467,7 +467,7 @@ def showwatch_add_watch(
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True))
-def showwatch_remove_watch(name: str) -> str:
+def pvr_remove_watch(name: str) -> str:
     """Delete a watch by name. Publish afterwards to stop the cron running it."""
     config = _load_watches()
     before = len(config.get("watches") or [])
@@ -475,11 +475,11 @@ def showwatch_remove_watch(name: str) -> str:
     if len(config["watches"]) == before:
         return "No watch named %r." % name
     _save_watches(config)
-    return "Removed %r. Call showwatch_publish_watches to make that live." % name
+    return "Removed %r. Call pvr_publish_watches to make that live." % name
 
 
 @mcp.tool(annotations=_WRITES)
-def showwatch_publish_watches(message: str = "") -> str:
+def pvr_publish_watches(message: str = "") -> str:
     """Commit and push watches.json so the GitHub Actions cron picks it up.
 
     This publishes to the remote repository - the watch does nothing until it

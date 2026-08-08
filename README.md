@@ -1,4 +1,4 @@
-# showwatch
+# pvr-inox-mcp
 
 Watches cinema booking APIs and pings you the moment a show you want becomes
 bookable - ntfy, Telegram, Pushover, Slack, Discord, email, or a webhook.
@@ -181,23 +181,23 @@ writing throwaway scripts.
 
 ```bash
 pip install -r requirements.txt
-claude mcp add showwatch -- python3 /path/to/showwatch/mcp_server.py
+claude mcp add pvr-inox -- python3 /path/to/pvr-inox-mcp/mcp_server.py
 ```
 
 | Tool | Answers |
 |---|---|
-| `showwatch_cities` | Which cities the chain covers |
-| `showwatch_cinemas` | Cinemas in a city + the `cinema_id` everything else needs |
-| `showwatch_now_showing` | What's playing, with certificate, length, formats |
-| `showwatch_showtimes` | Showtimes at a cinema on a date |
-| `showwatch_seats` | **Live seat availability, zone counted separately** - the one that matters |
-| `showwatch_is_open` | Is that date on sale yet |
-| `showwatch_list_watches` | What the cron watches, and whether it's live |
-| `showwatch_add_watch` | Create a watch conversationally |
-| `showwatch_remove_watch` | Delete one |
-| `showwatch_publish_watches` | Commit + push so the cron picks it up |
+| `pvr_cities` | Which cities the chain covers |
+| `pvr_cinemas` | Cinemas in a city + the `cinema_id` everything else needs |
+| `pvr_now_showing` | What's playing, with certificate, length, formats |
+| `pvr_showtimes` | Showtimes at a cinema on a date |
+| `pvr_seats` | **Live seat availability, zone counted separately** - the one that matters |
+| `pvr_is_open` | Is that date on sale yet |
+| `pvr_list_watches` | What the cron watches, and whether it's live |
+| `pvr_add_watch` | Create a watch conversationally |
+| `pvr_remove_watch` | Delete one |
+| `pvr_publish_watches` | Commit + push so the cron picks it up |
 
-`showwatch_seats` takes `seat_map=true` for an ASCII auditorium, which makes
+`pvr_seats` takes `seat_map=true` for an ASCII auditorium, which makes
 the problem obvious at a glance (`O` free in zone, `x` taken in zone, `o` free
 outside it, `.` taken outside it):
 
@@ -216,7 +216,7 @@ bookable on show-level status alone.
 
 ### Setting up a watch by asking
 
-`showwatch_add_watch` resolves a cinema name fragment to its id and
+`pvr_add_watch` resolves a cinema name fragment to its id and
 coordinates, then sanity-checks the film against what that cinema is listing
 today - so a typo surfaces immediately rather than as months of silence:
 
@@ -234,10 +234,10 @@ An ambiguous cinema is refused rather than guessed:
 ```
 
 **A new watch is not live when it is added.** The cron runs the *committed*
-config, so adding one only edits the local file; `showwatch_publish_watches`
+config, so adding one only edits the local file; `pvr_publish_watches`
 commits and pushes it. That split is deliberate - publishing pushes to a
 public repository, which should be a decision rather than a side effect.
-`showwatch_list_watches` flags the gap whenever the file is dirty.
+`pvr_list_watches` flags the gap whenever the file is dirty.
 
 ## Deploy
 
@@ -248,7 +248,7 @@ committing `state.json` back to the repo so the diff survives between runs.
    repo burns ~8,600 Actions minutes a month against a 2,000 free allowance.
    Nothing sensitive is in the code.
 2. Pick a notification channel below and add its secrets to the repo.
-3. Actions tab -> showwatch -> Run workflow, to record the baseline.
+3. Actions tab -> "pvr-inox watch" -> Run workflow, to record the baseline.
 
 ## Two ways to be told
 
