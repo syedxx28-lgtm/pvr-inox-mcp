@@ -93,6 +93,19 @@ mcp = FastMCP(
     website_url="https://github.com/notprashanth/pvr-inox-mcp",
 )
 
+# Remote mode: the server is reachable by anyone holding the URL, so the tools
+# that touch the filesystem or push to git are not registered at all. Absent
+# beats guarded - there is no handler to reach.
+REMOTE = os.environ.get("PVR_MCP_TRANSPORT", "stdio") != "stdio"
+
+
+def local_only(**kw):
+    """Register this tool only when served over stdio to a single local user."""
+    def wrap(fn):
+        return fn if REMOTE else mcp.tool(**kw)(fn)
+    return wrap
+
+
 # Everything here reads a public booking API and writes nothing.
 _LOOKUP = ToolAnnotations(
     readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=True
@@ -348,7 +361,7 @@ def _git(*args):
     )
 
 
-@mcp.tool(annotations=_LOOKUP)
+@local_only(annotations=_LOOKUP)
 def pvr_list_watches() -> str:
     """The watches the cron currently runs, and whether each is live."""
     config = _load_watches()
@@ -379,7 +392,7 @@ def pvr_list_watches() -> str:
     return "\n".join(lines)
 
 
-@mcp.tool(annotations=_WRITES)
+@local_only(annotations=_WRITES)
 def pvr_add_watch(
     name: str,
     city: str,
@@ -489,7 +502,7 @@ def pvr_add_watch(
     )
 
 
-@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True))
+@local_only(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True))
 def pvr_remove_watch(name: str) -> str:
     """Delete a watch by name. Publish afterwards to stop the cron running it."""
     config = _load_watches()
@@ -501,7 +514,7 @@ def pvr_remove_watch(name: str) -> str:
     return "Removed %r. Call pvr_publish_watches to make that live." % name
 
 
-@mcp.tool(annotations=_WRITES)
+@local_only(annotations=_WRITES)
 def pvr_publish_watches(message: str = "") -> str:
     """Commit and push watches.json so the GitHub Actions cron picks it up.
 
@@ -530,7 +543,16 @@ def _today():
 
 
 def main():
-    mcp.run()
+    """stdio by default; PVR_MCP_TRANSPORT=streamable-http to serve remotely."""
+    transport = os.environ.get("PVR_MCP_TRANSPORT", "stdio")
+    if transport == "stdio":
+        mcp.run()
+        return
+
+    mcp.settings.host = os.environ.get("PVR_MCP_HOST", "127.0.0.1")
+    mcp.settings.port = int(os.environ.get("PVR_MCP_PORT", "8760"))
+    mcp.settings.streamable_http_path = os.environ.get("PVR_MCP_PATH", "/mcp")
+    mcp.run(transport=transport)
 
 
 if __name__ == "__main__":

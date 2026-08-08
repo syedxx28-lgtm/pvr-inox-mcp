@@ -184,6 +184,20 @@ pip install -r requirements.txt
 claude mcp add pvr-inox -- python3 /path/to/pvr-inox-mcp/mcp_server.py
 ```
 
+### Serving it remotely
+
+```bash
+PVR_MCP_TRANSPORT=streamable-http PVR_MCP_PORT=8760 python3 mcp_server.py
+```
+
+Put TLS in front of it and the URL works as a custom connector.
+
+**The four watch-management tools are not registered in remote mode.** A
+remote URL is reachable by anyone holding it, and `pvr_publish_watches` runs
+`git push`. Rather than guard them, remote mode simply never registers them -
+absent beats guarded, since there is no handler to reach. Remote exposes only
+the six read-only lookups.
+
 | Tool | Answers |
 |---|---|
 | `pvr_cities` | Which cities the chain covers |
