@@ -190,6 +190,10 @@ claude mcp add showwatch -- python3 /path/to/showwatch/mcp_server.py
 | `showwatch_showtimes` | Showtimes at a cinema on a date |
 | `showwatch_seats` | **Live seat availability, zone counted separately** - the one that matters |
 | `showwatch_is_open` | Is that date on sale yet |
+| `showwatch_list_watches` | What the cron watches, and whether it's live |
+| `showwatch_add_watch` | Create a watch conversationally |
+| `showwatch_remove_watch` | Delete one |
+| `showwatch_publish_watches` | Commit + push so the cron picks it up |
 
 `showwatch_seats` takes `seat_map=true` for an ASCII auditorium, which makes
 the problem obvious at a glance (`O` free in zone, `x` taken in zone, `o` free
@@ -207,6 +211,31 @@ outside it, `.` taken outside it):
 That show reads "Filling Up Fast" with 75% booked - and not one free seat
 worth having. The server's instructions tell the client to never call a show
 bookable on show-level status alone.
+
+### Setting up a watch by asking
+
+`showwatch_add_watch` resolves a cinema name fragment to its id and
+coordinates, then sanity-checks the film against what that cinema is listing
+today - so a typo surfaces immediately rather than as months of silence:
+
+```
+WARNING: nothing matches 'ODDYSSEY' in imax at this cinema today.
+```
+
+An ambiguous cinema is refused rather than guessed:
+
+```
+'PVR' matches 12 cinemas in Chennai - be more specific:
+  388  PVR Palazzo-The Nexus Vijaya Mall
+  331  PVR Sathyam Royapettah Chennai
+  ...
+```
+
+**A new watch is not live when it is added.** The cron runs the *committed*
+config, so adding one only edits the local file; `showwatch_publish_watches`
+commits and pushes it. That split is deliberate - publishing pushes to a
+public repository, which should be a decision rather than a side effect.
+`showwatch_list_watches` flags the gap whenever the file is dirty.
 
 ## Deploy
 

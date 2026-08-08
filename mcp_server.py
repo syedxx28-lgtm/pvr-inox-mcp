@@ -10,11 +10,16 @@ Run:  python3 mcp_server.py
 """
 
 import json
+import os
+import subprocess
 
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
 import core
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+CONFIG_PATH = os.path.join(HERE, "watches.json")
 
 INSTRUCTIONS = """
 You can look up films, showtimes and live seat availability at any PVR or INOX
@@ -50,6 +55,14 @@ Things that matter when answering:
 
 - Seat names like "D14" are row letter plus number. "4 together at D14-D17"
   means genuinely adjacent, with aisles treated as breaks.
+
+You can also manage the cron watches that alert Slack when a booking window
+opens: showwatch_add_watch / showwatch_list_watches / showwatch_remove_watch.
+
+Adding a watch only edits a local file. The cron runs the COMMITTED config, so
+nothing takes effect until showwatch_publish_watches pushes it. Always tell the
+user a new watch is not live yet, and never publish unless they ask for it - it
+pushes to a public repository.
 
 Every tool returns a compact table by default. Pass format="json" for the full
 structured result when you need to compute over it rather than report it.
@@ -284,6 +297,213 @@ def showwatch_is_open(
         date,
         cinema_id,
     )
+
+
+# --------------------------------------------------------------------------
+# Managing the cron watches
+# --------------------------------------------------------------------------
+
+_WRITES = ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False)
+
+
+def _load_watches():
+    if not os.path.exists(CONFIG_PATH):
+        return {"watches": []}
+    with open(CONFIG_PATH) as fh:
+        return json.load(fh)
+
+
+def _save_watches(config):
+    with open(CONFIG_PATH, "w") as fh:
+        json.dump(config, fh, indent=1)
+        fh.write("\n")
+
+
+def _git(*args):
+    return subprocess.run(
+        ["git"] + list(args), cwd=HERE, capture_output=True, text=True, timeout=60
+    )
+
+
+@mcp.tool(annotations=_LOOKUP)
+def showwatch_list_watches() -> str:
+    """The watches the cron currently runs, and whether each is live."""
+    config = _load_watches()
+    watches = config.get("watches") or []
+    if not watches:
+        return "No watches configured."
+
+    dirty = _git("status", "--porcelain", "watches.json").stdout.strip()
+    lines = []
+    for w in watches:
+        lines.append(
+            "%-40s %s | cinema %s in %s | %s%s | %s"
+            % (
+                w.get("name", "?"),
+                "on " if w.get("enabled", True) else "OFF",
+                w.get("cinema_id"),
+                w.get("city"),
+                w.get("film_contains", "any film"),
+                " (%s)" % w["experience"] if w.get("experience") else "",
+                ",".join(w.get("weekdays") or ["any day"]),
+            )
+        )
+    if dirty:
+        lines.append(
+            "\nwatches.json has uncommitted changes - the cron still runs the "
+            "committed version. Call showwatch_publish_watches to make it live."
+        )
+    return "\n".join(lines)
+
+
+@mcp.tool(annotations=_WRITES)
+def showwatch_add_watch(
+    name: str,
+    city: str,
+    cinema: str,
+    film: str,
+    experience: str = "",
+    language: str = "",
+    weekdays: str = "",
+    min_adjacent: int = 1,
+    horizon_days: int = 16,
+    zone_rows: str = "",
+    zone_seats: str = "",
+) -> str:
+    """Create a watch for the cron to poll.
+
+    `cinema` is a name fragment ("Palazzo", "Phoenix") - it is resolved to the
+    cinema id and coordinates for you. `film` is a case-insensitive substring.
+    `weekdays` like "Sat,Sun" limits it to days worth going; omit for any day.
+
+    Leave zone_rows / zone_seats empty to let the good-seats zone derive itself
+    from that auditorium's geometry, which is what you normally want.
+
+    The watch is written locally and is NOT live until published.
+    """
+    matches = core.list_cinemas(city, query=cinema)
+    if not matches:
+        return "No cinema matching %r in %s. Try showwatch_cinemas to see the list." % (
+            cinema,
+            city,
+        )
+    if len(matches) > 1:
+        listing = "\n".join("  %s  %s" % (m["cinema_id"], m["name"]) for m in matches[:8])
+        return "%r matches %d cinemas in %s - be more specific:\n%s" % (
+            cinema,
+            len(matches),
+            city,
+            listing,
+        )
+    venue = matches[0]
+
+    config = _load_watches()
+    if any(w.get("name") == name for w in config.get("watches") or []):
+        return "A watch named %r already exists. Remove it first, or pick another name." % name
+
+    watch = {
+        "name": name,
+        "enabled": True,
+        "provider": "pvr",
+        "city": city,
+        "cinema_id": venue["cinema_id"],
+        "cinema_slug": venue["name"].replace(" ", "-"),
+        "lat": venue["lat"],
+        "lng": venue["lng"],
+        "film_contains": film.upper(),
+        "horizon_days": horizon_days,
+        "alert_on_restock": True,
+        "seat_detail": True,
+        "min_adjacent": min_adjacent,
+    }
+    if experience:
+        watch["experience"] = experience
+    if language:
+        watch["language"] = language
+    if weekdays:
+        watch["weekdays"] = [d.strip().title()[:3] for d in weekdays.split(",") if d.strip()]
+    if zone_rows:
+        watch["zone_rows"] = [r.strip().upper() for r in zone_rows.split(",") if r.strip()]
+    if zone_seats:
+        try:
+            lo, hi = zone_seats.replace("-", " ").split()
+            watch["zone_seats"] = [int(lo), int(hi)]
+        except ValueError:
+            return "zone_seats should look like '11-21'."
+
+    config.setdefault("watches", []).append(watch)
+    _save_watches(config)
+
+    # Sanity-check the film against what the cinema is actually listing, so a
+    # typo surfaces now rather than as months of silence.
+    note = ""
+    shows, err = core.day_sessions(city, venue["cinema_id"], _today(), venue["lat"], venue["lng"])
+    if not err:
+        hits = [s for s in shows if film.upper() in (s["film"] or "").upper()]
+        if experience:
+            hits = [s for s in hits if s["experience"] == experience]
+        note = (
+            "\nMatched %d show(s) at this cinema today, so the filters look right."
+            % len(hits)
+            if hits
+            else "\nWARNING: nothing matches %r%s at this cinema today. Fine if the "
+            "film hasn't opened yet - otherwise check the spelling with "
+            "showwatch_showtimes." % (film, " in " + experience if experience else "")
+        )
+
+    return (
+        "Added %r: %s (cinema %s), %s%s.\n"
+        "NOT LIVE YET - the cron runs the committed config. "
+        "Call showwatch_publish_watches to push it.%s"
+        % (
+            name,
+            venue["name"],
+            venue["cinema_id"],
+            film,
+            " in " + experience if experience else "",
+            note,
+        )
+    )
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True))
+def showwatch_remove_watch(name: str) -> str:
+    """Delete a watch by name. Publish afterwards to stop the cron running it."""
+    config = _load_watches()
+    before = len(config.get("watches") or [])
+    config["watches"] = [w for w in config.get("watches") or [] if w.get("name") != name]
+    if len(config["watches"]) == before:
+        return "No watch named %r." % name
+    _save_watches(config)
+    return "Removed %r. Call showwatch_publish_watches to make that live." % name
+
+
+@mcp.tool(annotations=_WRITES)
+def showwatch_publish_watches(message: str = "") -> str:
+    """Commit and push watches.json so the GitHub Actions cron picks it up.
+
+    This publishes to the remote repository - the watch does nothing until it
+    runs. Only watches.json is committed; nothing else in the tree is touched.
+    """
+    status = _git("status", "--porcelain", "watches.json").stdout.strip()
+    if not status:
+        return "watches.json has no uncommitted changes - already live."
+
+    _git("add", "watches.json")
+    commit = _git("commit", "-m", message or "watches: update via MCP")
+    if commit.returncode:
+        return "Commit failed:\n%s%s" % (commit.stdout, commit.stderr)
+
+    push = _git("push", "origin", "HEAD")
+    if push.returncode:
+        return "Committed locally but push failed:\n%s\nPush by hand to go live." % push.stderr.strip()
+    return "Published. The cron picks up the new config on its next run (within ~5-15 min)."
+
+
+def _today():
+    import datetime
+
+    return datetime.date.today().isoformat()
 
 
 def main():
