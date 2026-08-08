@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-showwatch - watch cinema booking APIs and shout on Slack the moment something opens.
+showwatch - watch cinema booking APIs and shout the moment something opens.
 
 Polls a cinema's showtime API across a forward date window and diffs the result
 against the last run. Three things are worth waking up for:
@@ -15,8 +15,12 @@ against the last run. Three things are worth waking up for:
 State lives in state.json so the diff survives across runs. Stdlib only,
 no pip install, so a GitHub Actions job is just "run python".
 
-  python watch.py                 poll, diff, notify Slack
-  python watch.py --dry-run       poll and print, never touch Slack or state
+Alerts go to whichever channels are configured - see notify.py. Slack,
+Telegram, ntfy, Pushover, Discord, email, a generic webhook, or a GitHub
+issue. Set the environment variables for the one you want.
+
+  python watch.py                 poll, diff, notify
+  python watch.py --dry-run       poll and print, notify nobody, save nothing
   python watch.py --show-all      print every matching show, not just changes
 """
 
@@ -28,6 +32,7 @@ import sys
 from concurrent import futures
 
 import core
+import notify
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(HERE, "watches.json")
@@ -223,10 +228,12 @@ def diff(watch, previous, snapshot):
 # --------------------------------------------------------------------------
 
 HEADLINES = {
-    "new_date": ":rotating_light: Booking just opened",
-    "new_show": ":new: Show added",
-    "back_in_stock": ":recycle: Back in stock",
-    "seats_freed": ":seat: Good seats opened up",
+    # Real emoji, not Slack :codes: - these have to render on Telegram, ntfy,
+    # email and a GitHub issue too.
+    "new_date": "\U0001F6A8 Booking just opened",
+    "new_show": "\U0001F195 Show added",
+    "back_in_stock": "\u267B\uFE0F Back in stock",
+    "seats_freed": "\U0001FA91 Good seats opened up",
 }
 
 
@@ -234,14 +241,14 @@ def seat_summary(show):
     return core.describe_seats(show.get("seats"))
 
 
-def format_slack(watch, events):
+def format_alert(watch, events):
+    """Plain text, so it renders the same on every channel. Returns (title, body, url)."""
     url = PROVIDERS[watch.get("provider", "pvr")][1](watch, events[0]["date"])
-    label = watch["name"]
 
     lines = []
     for ev in events:
         pretty = datetime.date.fromisoformat(ev["date"]).strftime("%a %d %b")
-        lines.append("*%s* - %s" % (HEADLINES[ev["kind"]], pretty))
+        lines.append("%s - %s" % (HEADLINES[ev["kind"]], pretty))
         for s in ev["shows"]:
             bits = [s["time"]]
             if s["screen"]:
@@ -253,24 +260,25 @@ def format_slack(watch, events):
                 bits.append(seats)
             lines.append("   - %s" % "  |  ".join(bits))
 
-    lines.append("<%s|Book now>" % url)
-    return {"text": "*%s*\n%s" % (label, "\n".join(lines))}
+    return watch["name"], "\n".join(lines), url
 
 
-def notify_slack(payload):
-    hook = os.environ.get("SLACK_WEBHOOK_URL")
-    if not hook:
-        print("SLACK_WEBHOOK_URL not set - printing instead:\n", payload["text"])
+def deliver(title, body, url):
+    """True only if at least one channel actually took it."""
+    channels = notify.configured()
+    if not channels:
+        print(
+            "No notification channel configured - printing instead:\n%s\n%s\n%s"
+            % (title, body, url)
+        )
         return False
 
-    req = urllib.request.Request(
-        hook,
-        json.dumps(payload).encode(),
-        {"Content-Type": "application/json"},
-    )
-    with urllib.request.urlopen(req, timeout=20) as resp:
-        resp.read()
-    return True
+    sent, failed = notify.send(title, body, url)
+    for problem in failed:
+        print("  delivery failed - %s" % problem, file=sys.stderr)
+    if sent:
+        print("  alerted via %s" % ", ".join(sent))
+    return bool(sent)
 
 
 # --------------------------------------------------------------------------
@@ -278,7 +286,7 @@ def notify_slack(payload):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--dry-run", action="store_true", help="never write state or Slack")
+    ap.add_argument("--dry-run", action="store_true", help="never write state or notify")
     ap.add_argument("--show-all", action="store_true", help="print every matching show")
     ap.add_argument("--watch", help="run only the watch with this name")
     args = ap.parse_args()
@@ -312,18 +320,15 @@ def main():
             events = diff(watch, previous, snapshot)
             if events:
                 fired += len(events)
-                payload = format_slack(watch, events)
+                title, body, url = format_alert(watch, events)
                 if args.dry_run:
-                    print(payload["text"])
-                else:
-                    delivered = notify_slack(payload)
-                    if not delivered:
-                        # Advancing state here would swallow the opening for
-                        # good - it can only ever be reported once. Leave the
-                        # old state so the next run fires it again.
-                        print("  NOT DELIVERED - state held back", file=sys.stderr)
-                        continue
-                    print("  alerted: %d event(s)" % len(events))
+                    print("%s\n%s\n%s" % (title, body, url))
+                elif not deliver(title, body, url):
+                    # Advancing state here would swallow the opening for good -
+                    # it can only ever be reported once. Leave the old state so
+                    # the next run fires it again.
+                    print("  NOT DELIVERED - state held back", file=sys.stderr)
+                    continue
             else:
                 print("  no change (%d open date(s))" % len(snapshot))
 

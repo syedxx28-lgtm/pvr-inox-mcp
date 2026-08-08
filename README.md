@@ -1,7 +1,7 @@
 # showwatch
 
-Watches cinema booking APIs and pings Slack the moment a show you want becomes
-bookable. Built because IMAX tickets at PVR Palazzo sell out before you notice
+Watches cinema booking APIs and pings you the moment a show you want becomes
+bookable - ntfy, Telegram, Pushover, Slack, Discord, email, or a webhook. Built because IMAX tickets at PVR Palazzo sell out before you notice
 the window opened.
 
 Stdlib-only Python. No pip install, no browser, no scraping - it reads the same
@@ -9,7 +9,7 @@ JSON API the PVR web app calls.
 
 Two ways in:
 
-- **`watch.py`** - the cron watcher. Polls on a schedule, alerts Slack.
+- **`watch.py`** - the cron watcher. Polls on a schedule, alerts you.
 - **`mcp_server.py`** - an MCP server, so you can just *ask*: what's showing,
   where are the good seats, is that date on sale yet. Any city in India.
 
@@ -245,9 +245,37 @@ committing `state.json` back to the repo so the diff survives between runs.
 1. Push this to its **own repo**. Keep it public - 5-minute cron on a private
    repo burns ~8,600 Actions minutes a month against a 2,000 free allowance.
    Nothing sensitive is in the code.
-2. Slack: create an Incoming Webhook pointed at the channel or DM you want.
-3. Add it as repo secret **`SLACK_WEBHOOK_URL`**.
-4. Actions tab -> showwatch -> Run workflow, to record the baseline.
+2. Pick a notification channel below and add its secrets to the repo.
+3. Actions tab -> showwatch -> Run workflow, to record the baseline.
+
+## Notification channels
+
+Set the environment variables for the channel you want and it switches itself
+on. Configure several and all of them get the alert. Nothing to edit in code.
+
+| Channel | Variables | Cost / friction |
+|---|---|---|
+| **ntfy** | `NTFY_TOPIC` (opt. `NTFY_SERVER`) | **No account at all.** Install the app, pick a topic name. Sent at priority 5 so it breaks through a silenced phone. |
+| **Telegram** | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | Free. ~5 min with @BotFather. Reliable lock-screen push. |
+| **Pushover** | `PUSHOVER_USER_KEY`, `PUSHOVER_APP_TOKEN` | $5 one-off. The best custom alert sounds. |
+| **Slack** | `SLACK_WEBHOOK_URL` | Free. Only useful if you live in Slack. |
+| **Discord** | `DISCORD_WEBHOOK_URL` | Free, same shape as Slack. |
+| **Email** | `SMTP_HOST`, `SMTP_USER`, `SMTP_PASS`, `EMAIL_TO` (opt. `SMTP_PORT`) | Universal, but does not reliably wake you. |
+| **Generic webhook** | `GENERIC_WEBHOOK_URL` | POSTs `{title, text, url}`. Bridge to anything else. |
+| **GitHub issue** | `GITHUB_TOKEN`, `GITHUB_REPOSITORY` | Zero extra accounts - the Actions run already has both. Relies on GitHub app notifications. |
+
+**If you want to be woken up, use ntfy, Telegram or Pushover.** Email and
+GitHub issues are for a record, not an interrupt - and an alert you don't see
+is not an alert.
+
+Two that are deliberately absent, both because of Indian regulatory friction
+rather than technical difficulty: **WhatsApp** needs a Meta Business account
+and template pre-approval, and **SMS/voice** to Indian numbers needs DLT
+registration. Use the generic webhook to bridge to either if you have that set
+up already.
+
+Messages are plain text with real emoji, so they render the same everywhere -
+no Slack `:codes:` leaking into a Telegram message.
 
 ### Timing caveat
 
