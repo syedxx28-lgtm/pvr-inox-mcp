@@ -15,7 +15,9 @@
    "horizon_days": 12,
    "alert_on_restock": true,
    "seat_detail": true,
-   "min_adjacent": 2
+   "zone_rows": ["F", "E", "D", "C"],
+   "zone_seats": [11, 21],
+   "min_adjacent": 1
   }
  ]
 }

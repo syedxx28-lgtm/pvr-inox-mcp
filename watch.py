@@ -117,11 +117,29 @@ def pvr_fetch_day(watch, date_str):
     return shows, None
 
 
-def pvr_fetch_seats(token):
+def in_zone(watch, row_name, seat_number):
+    """Is this seat inside the 'good seats' zone?
+
+    The zone is the rows you actually want to sit in, intersected with a range
+    of seat numbers. On this layout the centre block between the two aisles is
+    seats 11-21, so ["F","E","D","C"] x [11,21] is back-ish and dead centre.
+    With no zone configured every seat qualifies.
+    """
+    rows = watch.get("zone_rows")
+    if rows and row_name not in rows:
+        return False
+    lo, hi = watch.get("zone_seats", [0, 9999])
+    return lo <= seat_number <= hi
+
+
+def pvr_fetch_seats(token, watch):
     """Seat map for one session. Returns (summary, error).
 
     In the layout, s == 1 is a free seat and s == 2 is taken; entries with no
     seat name are aisles and gaps. Verified against the rendered seat map.
+
+    Counts the whole auditorium and the zone separately - the zone numbers are
+    the ones worth alerting on, the totals are just context.
     """
     req = urllib.request.Request(
         PVR_SEATS, json.dumps({"encrypted": token}).encode(), dict(PVR_HEADERS)
@@ -134,13 +152,14 @@ def pvr_fetch_seats(token):
     if payload.get("status") != 200 or not payload.get("output"):
         return None, "seatmap unavailable"
 
-    total = free = 0
-    free_names = []
+    total = free = zone_total = zone_free = 0
+    zone_names = []
     best_run, best_where = 0, ""
 
     for row in payload["output"].get("rows") or []:
         if row.get("t") != "seats":
             continue
+
         run = []
         for seat in row.get("s") or []:
             name = seat.get("sn")
@@ -149,22 +168,42 @@ def pvr_fetch_seats(token):
                 # not "together", so this breaks the run rather than skipping.
                 run = []
                 continue
+
             total += 1
-            if seat.get("s") == 1:
+            try:
+                number = int(seat.get("displaynumber") or 0)
+            except ValueError:
+                number = 0
+            is_free = seat.get("s") == 1
+            if is_free:
                 free += 1
-                free_names.append(name)
+
+            if not in_zone(watch, row.get("n"), number):
+                # Outside the zone: never counted, and it breaks adjacency so a
+                # run can't straddle the zone edge.
+                run = []
+                continue
+
+            zone_total += 1
+            if is_free:
+                zone_free += 1
+                zone_names.append(name)
                 run.append(name)
                 if len(run) > best_run:
-                    best_run, best_where = len(run), "%s-%s" % (run[0], run[-1])
+                    best_run, best_where = len(run), (
+                        run[0] if len(run) == 1 else "%s-%s" % (run[0], run[-1])
+                    )
             else:
                 run = []
 
     return {
         "total": total,
         "free": free,
+        "zone_total": zone_total,
+        "zone_free": zone_free,
         "best_run": best_run,
         "best_where": best_where,
-        "seats": free_names[:40],
+        "seats": zone_names[:40],
     }, None
 
 
@@ -240,7 +279,7 @@ def poll(watch, today, verbose=False):
             ]
             with futures.ThreadPoolExecutor(max_workers=8) as pool:
                 for show, (seats, err) in zip(
-                    todo, pool.map(lambda s: pvr_fetch_seats(s["token"]), todo)
+                    todo, pool.map(lambda s: pvr_fetch_seats(s["token"], watch), todo)
                 ):
                     if err:
                         print(
@@ -261,7 +300,8 @@ def poll(watch, today, verbose=False):
                         % (
                             s["time"],
                             s["status"],
-                            " %d/%d free" % (s["seats"]["free"], s["seats"]["total"])
+                            " zone %d/%d"
+                            % (s["seats"]["zone_free"], s["seats"]["zone_total"])
                             if s.get("seats")
                             else "",
                         )
@@ -317,9 +357,9 @@ def diff(watch, previous, snapshot):
                     )
                     continue
 
-            # A sold-out show that frees up a pair is the case worth waking for.
-            # Alert only when the best adjacent block crosses the threshold from
-            # below, so a show sitting at 6-together does not re-fire every run.
+            # A show that frees up a seat in the zone is the case worth waking
+            # for. Alert only when the best block crosses the threshold from
+            # below, so a show sitting above it does not re-fire every run.
             need = watch.get("min_adjacent", 0)
             if need and show.get("seats") and before.get("seats"):
                 was_run = before["seats"].get("best_run", 0)
@@ -340,20 +380,31 @@ HEADLINES = {
     "new_date": ":rotating_light: Booking just opened",
     "new_show": ":new: Show added",
     "back_in_stock": ":recycle: Back in stock",
-    "seats_freed": ":seat: Seats together opened up",
+    "seats_freed": ":seat: Good seats opened up",
 }
 
 
 def seat_summary(show):
-    """'37/442 free - 11 together at O10-O20', or '' if seats weren't fetched."""
+    """Zone first, because that is the only part worth acting on.
+
+    'GOOD SEATS: 3 together at D14-D16 (7 free in zone, 34% booked overall)'
+    """
     s = show.get("seats")
     if not s or not s.get("total"):
         return ""
+
     pct = 100.0 * (s["total"] - s["free"]) / s["total"]
-    out = "%d/%d free (%.0f%% booked)" % (s["free"], s["total"], pct)
-    if s.get("best_run"):
-        out += " - %d together at %s" % (s["best_run"], s["best_where"])
-    return out
+    context = "%d free in zone, %.0f%% booked overall" % (s["zone_free"], pct)
+
+    if not s.get("best_run"):
+        return "no good seats (%s)" % context
+    if s["best_run"] == 1:
+        return "GOOD SEAT: %s (%s)" % (s["best_where"], context)
+    return "GOOD SEATS: %d together at %s (%s)" % (
+        s["best_run"],
+        s["best_where"],
+        context,
+    )
 
 
 def format_slack(watch, events):

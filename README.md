@@ -14,7 +14,7 @@ JSON API the PVR web app calls.
 | `new_date` | A date that answered "closed" now has shows. **The booking window just opened.** |
 | `new_show` | An extra session appeared on an already-open date. |
 | `back_in_stock` | A session went from Sold Out back to Available - a cancellation or a released block. |
-| `seats_freed` | A block of `min_adjacent` seats *next to each other* opened up on a show that had none. The one that matters if you need two together. |
+| `seats_freed` | Seats opened up **inside the zone** - the rows and centre block you actually want. The one that matters. |
 
 ## How it works
 
@@ -40,7 +40,31 @@ With `seat_detail: true`, each showtime is followed up with
 - entries with no seat name (`sn`) are aisles and gaps - these **break**
   adjacency, since seats either side of an aisle are not "together"
 
-Alerts then read like `293/442 free (34% booked) - 11 together at O10-O20`.
+### The zone is the point
+
+A show-level `Available` is close to meaningless: the good seats go first. On
+AUDI 5 at Palazzo, shows sitting at 37-114 free seats had **zero** free in the
+back-centre block. So `zone_rows` x `zone_seats` defines the seats you'd
+actually sit in, and only those trigger `seats_freed`.
+
+AUDI 5 is 15 rows, **O nearest the screen through A at the back**, each split
+into three blocks by two aisles - the centre block is seats **11-21**:
+
+```
+              SCREEN
+ O    1-9      11-21     22-29      front
+ N    1-10     11-21     22-31
+ ...
+ G    1-6      11-21     22-23      (narrow rows)
+ D    1-10     11-21     22-31
+ A    ----------- 1-34 ----------   back wall
+```
+
+A seat outside the zone also **breaks** adjacency, so a run can never straddle
+the zone edge and report seats you don't want as part of a block.
+
+Alerts then read
+`GOOD SEATS: 11 together at D11-D21 (40 free in zone, 15% booked overall)`.
 
 This costs one extra request per showtime, so the calls are issued
 concurrently. Already-started ("Lapsed") shows are skipped - they have no seat
@@ -71,15 +95,20 @@ direct avoids that entirely.
    "horizon_days": 12,
    "alert_on_restock": true,
    "seat_detail": true,
-   "min_adjacent": 2
+   "zone_rows": ["F", "E", "D", "C"],
+   "zone_seats": [11, 21],
+   "min_adjacent": 1
   }
  ]
 }
 ```
 
+`zone_rows` and `zone_seats` (inclusive seat numbers) define the good seats.
+Omit both to treat the whole auditorium as the zone.
+
 `min_adjacent` is how many seats side by side you need; `seats_freed` fires only
-when a show crosses that threshold from below, so a show already sitting on six
-free-together does not re-fire every run. Set it to `0` to switch that off.
+when a show crosses that threshold from below, so a show already above it does
+not re-fire every run. Set it to `0` to switch that off.
 
 `film_contains` is a case-insensitive substring of the film name.
 `experience` matches PVR's key (`imax`, `pxl`, `bigpix`, `4dx`, ...); leave it
