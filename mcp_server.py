@@ -9,12 +9,13 @@ cinema showtimes and, more usefully, which seats are actually free.
 Run:  python3 mcp_server.py
 """
 
+import base64
 import json
 import os
 import subprocess
 
 from mcp.server.fastmcp import FastMCP
-from mcp.types import ToolAnnotations
+from mcp.types import Icon, ToolAnnotations
 
 import core
 
@@ -68,7 +69,29 @@ Every tool returns a compact table by default. Pass format="json" for the full
 structured result when you need to compute over it rather than report it.
 """
 
-mcp = FastMCP("pvr-inox", instructions=INSTRUCTIONS)
+# Inlined as a data URI so the server stays self-contained - no asset host to
+# depend on, and it survives being copied anywhere.
+def _icon():
+    path = os.path.join(HERE, "icon.svg")
+    try:
+        with open(path, "rb") as fh:
+            return [
+                Icon(
+                    src="data:image/svg+xml;base64," + base64.b64encode(fh.read()).decode(),
+                    mimeType="image/svg+xml",
+                    sizes=["any"],
+                )
+            ]
+    except OSError:
+        return None  # an icon is decoration; never let it stop the server
+
+
+mcp = FastMCP(
+    "pvr-inox",
+    instructions=INSTRUCTIONS,
+    icons=_icon(),
+    website_url="https://github.com/notprashanth/pvr-inox-mcp",
+)
 
 # Everything here reads a public booking API and writes nothing.
 _LOOKUP = ToolAnnotations(
