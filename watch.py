@@ -320,7 +320,13 @@ def main():
                 if args.dry_run:
                     print(payload["text"])
                 else:
-                    notify_slack(payload)
+                    delivered = notify_slack(payload)
+                    if not delivered:
+                        # Advancing state here would swallow the opening for
+                        # good - it can only ever be reported once. Leave the
+                        # old state so the next run fires it again.
+                        print("  NOT DELIVERED - state held back", file=sys.stderr)
+                        continue
                     print("  alerted: %d event(s)" % len(events))
             else:
                 print("  no change (%d open date(s))" % len(snapshot))
