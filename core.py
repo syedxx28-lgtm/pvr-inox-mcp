@@ -21,11 +21,28 @@ import urllib.error
 import urllib.request
 
 # Google-fronted hosts hang for ~75s on a black-holed IPv6 route before falling
-# back, so pin every lookup to A records.
-_getaddrinfo = socket.getaddrinfo
-socket.getaddrinfo = lambda *a, **kw: [
-    r for r in _getaddrinfo(*a, **kw) if r[0] == socket.AF_INET
-]
+# back, so prefer A records.
+#
+# Capture the ORIGINAL resolver once. A reload of this module would otherwise
+# capture the already-patched function and the wrapper would call itself -
+# RecursionError on the first lookup.
+_getaddrinfo = getattr(socket, "_pvr_original_getaddrinfo", socket.getaddrinfo)
+socket._pvr_original_getaddrinfo = _getaddrinfo
+
+
+def _ipv4_first(*args, **kwargs):
+    """Prefer IPv4, but never return an empty list.
+
+    Filtering to AF_INET unconditionally means a resolver that momentarily
+    answers with only AAAA records yields nothing, and the caller sees
+    "nodename nor servname provided, or not known". In a long-running process
+    that looks like a permanent outage. Fall back to whatever was resolved.
+    """
+    results = _getaddrinfo(*args, **kwargs)
+    return [r for r in results if r[0] == socket.AF_INET] or results
+
+
+socket.getaddrinfo = _ipv4_first
 
 API = "https://api3.pvrcinemas.com/api/v1/booking"
 
