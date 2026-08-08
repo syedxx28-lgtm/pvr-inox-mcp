@@ -549,8 +549,11 @@ def main():
         mcp.run()
         return
 
+    # Cloud Run and most PaaS inject PORT and require binding 0.0.0.0.
     mcp.settings.host = os.environ.get("PVR_MCP_HOST", "127.0.0.1")
-    mcp.settings.port = int(os.environ.get("PVR_MCP_PORT", "8760"))
+    mcp.settings.port = int(
+        os.environ.get("PORT") or os.environ.get("PVR_MCP_PORT", "8760")
+    )
     mcp.settings.streamable_http_path = os.environ.get("PVR_MCP_PATH", "/mcp")
     mcp.run(transport=transport)
 

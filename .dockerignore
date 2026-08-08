@@ -1,0 +1,9 @@
+.git
+__pycache__/
+*.pyc
+state.json
+watches.json
+watch.py
+notify.py
+.github/
+README.md

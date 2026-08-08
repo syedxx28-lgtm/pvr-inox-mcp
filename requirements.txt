@@ -1,2 +1,6 @@
 # core.py and watch.py are stdlib-only. This is only for the MCP server.
-mcp>=1.0
+#
+# Pinned below 2.0: mcp 2.0 removed mcp.server.fastmcp, which this server is
+# written against. `mcp>=1.0` silently floated to 2.0 and broke every fresh
+# install while a stale local 1.27 kept working.
+mcp>=1.9,<2
