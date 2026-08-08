@@ -1,8 +1,9 @@
 # showwatch
 
 Watches cinema booking APIs and pings you the moment a show you want becomes
-bookable - ntfy, Telegram, Pushover, Slack, Discord, email, or a webhook. Built because IMAX tickets at PVR Palazzo sell out before you notice
-the window opened.
+bookable - ntfy, Telegram, Pushover, Slack, Discord, email, or a webhook.
+Built because IMAX tickets at PVR Palazzo sell out before you notice the
+window opened.
 
 Stdlib-only Python. No pip install, no browser, no scraping - it reads the same
 JSON API the PVR web app calls.
@@ -138,8 +139,9 @@ direct avoids that entirely.
 since every open date costs one seat-map call per showtime - so `horizon_days`
 can reach further out for the same work.
 
-`zone_rows` and `zone_seats` (inclusive seat numbers) define the good seats.
-Omit both to treat the whole auditorium as the zone.
+`zone_rows` and `zone_seats` (inclusive seat numbers) override the good-seats
+zone. Omit both and it derives itself from the auditorium's geometry, which is
+usually what you want - see above.
 
 `min_adjacent` is how many seats side by side you need; `seats_freed` fires only
 when a show crosses that threshold from below, so a show already above it does
