@@ -15,6 +15,7 @@ import os
 import subprocess
 
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import Icon, ToolAnnotations
 
 import core
@@ -86,11 +87,26 @@ def _icon():
         return None  # an icon is decoration; never let it stop the server
 
 
+# DNS-rebinding protection validates the Host header and defaults to localhost
+# only, so a hosted deployment answers 421 until its own hostname is allowed.
+# PVR_MCP_ALLOWED_HOSTS is a comma-separated list; "*" disables the check.
+_hosts = [h.strip() for h in os.environ.get("PVR_MCP_ALLOWED_HOSTS", "").split(",") if h.strip()]
+_security = (
+    TransportSecuritySettings(enable_dns_rebinding_protection=False)
+    if _hosts == ["*"]
+    else TransportSecuritySettings(
+        allowed_hosts=_hosts, allowed_origins=["https://" + h for h in _hosts]
+    )
+    if _hosts
+    else None
+)
+
 mcp = FastMCP(
     "pvr-inox",
     instructions=INSTRUCTIONS,
     icons=_icon(),
     website_url="https://github.com/notprashanth/pvr-inox-mcp",
+    transport_security=_security,
 )
 
 # Remote mode: the server is reachable by anyone holding the URL, so the tools

@@ -184,6 +184,29 @@ pip install -r requirements.txt
 claude mcp add pvr-inox -- python3 /path/to/pvr-inox-mcp/mcp_server.py
 ```
 
+### Hosted endpoint
+
+```
+https://pvr-inox-mcp-612942167838.asia-south1.run.app/mcp
+```
+
+Add it in Claude as a custom connector ("Remote MCP server URL"). No auth -
+it is read-only lookups over a public API.
+
+Deployed to Cloud Run (`asia-south1`, close to the origin), scale-to-zero:
+
+```bash
+gcloud run deploy pvr-inox-mcp --source . --region=asia-south1 \
+  --allow-unauthenticated \
+  --set-env-vars="PVR_MCP_TRANSPORT=streamable-http,PVR_MCP_HOST=0.0.0.0,\
+PVR_MCP_PATH=/mcp,PVR_MCP_ALLOWED_HOSTS=<your-run-hostname>"
+```
+
+`PVR_MCP_ALLOWED_HOSTS` is required. MCP enables DNS-rebinding protection by
+default, which validates the `Host` header against localhost only - a hosted
+deployment answers **HTTP 421** until its own hostname is listed. `*` disables
+the check entirely.
+
 ### Serving it remotely
 
 ```bash
