@@ -321,7 +321,7 @@ def deliver(title, body, url, priority=5):
 # --------------------------------------------------------------------------
 
 
-def stream(config, state, args):
+def stream(config, state, args, state_path):
     """Poll forever, printing ONE LINE per event on stdout.
 
     This is the shape an agent's watch tool wants: keep the polling in Python,
@@ -367,7 +367,7 @@ def stream(config, state, args):
             cutoff = today.isoformat()
             state[watch["name"]] = {d: v for d, v in merged.items() if d >= cutoff}
 
-        with open(STATE_PATH, "w") as fh:
+        with open(state_path, "w") as fh:
             json.dump(state, fh, indent=1, sort_keys=True)
         time.sleep(max(30, args.interval))
 
@@ -396,16 +396,14 @@ def main():
     with open(CONFIG_PATH) as fh:
         config = json.load(fh)
 
-    global STATE_PATH
-    STATE_PATH = args.state
-
+    state_path = args.state
     state = {}
-    if os.path.exists(STATE_PATH):
-        with open(STATE_PATH) as fh:
+    if os.path.exists(state_path):
+        with open(state_path) as fh:
             state = json.load(fh)
 
     if args.stream:
-        return stream(config, state, args)
+        return stream(config, state, args, state_path)
 
     today = datetime.date.today()
     fired = 0
@@ -452,7 +450,7 @@ def main():
         state[watch["name"]] = merged
 
     if not args.dry_run:
-        with open(STATE_PATH, "w") as fh:
+        with open(state_path, "w") as fh:
             json.dump(state, fh, indent=1, sort_keys=True)
 
     return 0 if fired == 0 else 0
