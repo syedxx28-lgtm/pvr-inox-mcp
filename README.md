@@ -250,6 +250,43 @@ committing `state.json` back to the repo so the diff survives between runs.
 2. Pick a notification channel below and add its secrets to the repo.
 3. Actions tab -> showwatch -> Run workflow, to record the baseline.
 
+## Two ways to be told
+
+If you already have an MCP client, you may not need a notification service at
+all - but the two modes are not interchangeable, and the difference is what
+happens when you close your laptop.
+
+| | Durable watch | In-session watch |
+|---|---|---|
+| Runs on | GitHub Actions cron | Your machine, inside an agent session |
+| Setup | Repo + one secret | **None** - the MCP is already there |
+| Survives closing the laptop | **Yes** | No |
+| Survives closing the agent | **Yes** | No |
+| Good for | Days of waiting for an unknown moment | An afternoon of watching for a restock |
+
+**In-session** is `watch.py --stream`, which polls forever and prints one line
+per event on stdout - the shape an agent watch tool wants:
+
+```bash
+python watch.py --stream --interval 60
+```
+```
+🚨 Booking just opened | The Odyssey IMAX | Sat 15 Aug 09:00 AM | 11 together - D11-D21
+🪑 Good seats opened up | The Odyssey IMAX | Sat 8 Aug 04:05 PM | 4 together - C16-C19
+```
+
+Point an agent's monitor at that and each line becomes a notification. Note
+what it does *not* do: wake a model every minute to poll an API. The polling
+stays in Python, where it is free, and only real events reach the model.
+
+**The catch, and it decides the choice:** agent-side schedulers are tied to the
+session. Claude Code's cron jobs live only in the current session, fire only
+while it is idle, and expire after 7 days; monitors end when the session ends.
+A booking window opening on a Monday morning while your laptop is shut is
+exactly the case that needs the durable path.
+
+Use in-session for a watch measured in hours. Use the cron for anything longer.
+
 ## Notification channels
 
 Set the environment variables for the channel you want and it switches itself

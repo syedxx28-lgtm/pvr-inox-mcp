@@ -321,11 +321,70 @@ def deliver(title, body, url, priority=5):
 # --------------------------------------------------------------------------
 
 
+def stream(config, state, args):
+    """Poll forever, printing ONE LINE per event on stdout.
+
+    This is the shape an agent's watch tool wants: keep the polling in Python,
+    where it costs nothing, and surface only actual events to the model. The
+    alternative - waking a model every few minutes to poll an API itself - buys
+    nothing and burns a turn each time.
+
+    Nothing is delivered to a notification channel here; the caller reading
+    stdout is the channel.
+    """
+    import time
+
+    while True:
+        today = datetime.date.today()
+        for watch in config["watches"]:
+            if not watch.get("enabled", True):
+                continue
+            if args.watch and watch["name"] != args.watch:
+                continue
+
+            snapshot = poll(watch, today)
+            previous = state.get(watch["name"], {})
+            if previous:
+                for ev in diff(watch, previous, snapshot):
+                    when = datetime.date.fromisoformat(ev["date"]).strftime("%a %-d %b")
+                    for show in ev["shows"]:
+                        print(
+                            "%s | %s | %s %s | %s"
+                            % (
+                                HEADLINES[ev["kind"]],
+                                watch["name"],
+                                when,
+                                show["time"],
+                                short_seats(show),
+                            ),
+                            flush=True,  # unbuffered, or events sit unseen
+                        )
+
+            merged = dict(previous)
+            for date_str, shows in snapshot.items():
+                if shows is not None:
+                    merged[date_str] = shows
+            cutoff = today.isoformat()
+            state[watch["name"]] = {d: v for d, v in merged.items() if d >= cutoff}
+
+        with open(STATE_PATH, "w") as fh:
+            json.dump(state, fh, indent=1, sort_keys=True)
+        time.sleep(max(30, args.interval))
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--dry-run", action="store_true", help="never write state or notify")
     ap.add_argument("--show-all", action="store_true", help="print every matching show")
     ap.add_argument("--watch", help="run only the watch with this name")
+    ap.add_argument(
+        "--stream",
+        action="store_true",
+        help="poll forever, print one line per event (for an agent to watch)",
+    )
+    ap.add_argument(
+        "--interval", type=int, default=60, help="seconds between polls in --stream"
+    )
     args = ap.parse_args()
 
     with open(CONFIG_PATH) as fh:
@@ -335,6 +394,9 @@ def main():
     if os.path.exists(STATE_PATH):
         with open(STATE_PATH) as fh:
             state = json.load(fh)
+
+    if args.stream:
+        return stream(config, state, args)
 
     today = datetime.date.today()
     fired = 0
