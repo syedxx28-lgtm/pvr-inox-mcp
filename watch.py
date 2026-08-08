@@ -250,8 +250,17 @@ def poll(watch, today, verbose=False):
     fetch_day, _ = PROVIDERS[watch.get("provider", "pvr")]
     snapshot = {}
 
+    want_days = watch.get("weekdays")
+
     for offset in range(watch.get("horizon_days", 12)):
-        date_str = (today + datetime.timedelta(days=offset)).isoformat()
+        date = today + datetime.timedelta(days=offset)
+        date_str = date.isoformat()
+
+        # Only the days you'd actually go. Also keeps the request count down,
+        # since each open date costs a seat-map call per showtime.
+        if want_days and date.strftime("%a") not in want_days:
+            continue
+
         shows, err = fetch_day(watch, date_str)
 
         if err == "closed":

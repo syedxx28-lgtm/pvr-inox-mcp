@@ -92,7 +92,8 @@ direct avoids that entirely.
    "film_contains": "ODYSSEY",
    "experience": "imax",
    "language": "English",
-   "horizon_days": 12,
+   "horizon_days": 16,
+   "weekdays": ["Sat", "Sun"],
    "alert_on_restock": true,
    "seat_detail": true,
    "zone_rows": ["F", "E", "D", "C"],
@@ -102,6 +103,11 @@ direct avoids that entirely.
  ]
 }
 ```
+
+`weekdays` limits the watch to days you'd actually go (`%a` names - `Mon`,
+`Sat`...). Omit it to watch every day. It also cuts the request count sharply,
+since every open date costs one seat-map call per showtime - so `horizon_days`
+can reach further out for the same work.
 
 `zone_rows` and `zone_seats` (inclusive seat numbers) define the good seats.
 Omit both to treat the whole auditorium as the zone.
