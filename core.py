@@ -29,9 +29,13 @@ socket.getaddrinfo = lambda *a, **kw: [
 
 API = "https://api3.pvrcinemas.com/api/v1/booking"
 
-# Chennai's centre, used when a caller gives no coordinates. The API applies a
-# distance filter to cinema lists, so coordinates decide what comes back.
+# Last-resort fallback only. Coordinates matter: the API measures distance from
+# whatever you send and filters cinema lists by it, so sending one city's
+# coordinates while asking about another gives nonsense distances and can drop
+# cinemas. Prefer city_coords() - this is used only if that lookup fails.
 DEFAULT_LATLNG = ("13.0827", "80.2707")
+
+_CITY_COORDS = {}
 
 
 def _headers(city):
@@ -60,6 +64,39 @@ def _post(path, body, city="Chennai", timeout=30):
 # --------------------------------------------------------------------------
 
 
+def _load_city_coords():
+    """Cache each city's own centre, which the city endpoint reports."""
+    if _CITY_COORDS:
+        return _CITY_COORDS
+    payload = _post("content/city", {"lat": DEFAULT_LATLNG[0], "lng": DEFAULT_LATLNG[1]})
+
+    def walk(node):
+        if isinstance(node, dict):
+            name, lat, lng = node.get("name"), node.get("lat"), node.get("lng")
+            if name and lat and lng:
+                _CITY_COORDS.setdefault(str(name).strip().lower(), (str(lat), str(lng)))
+            for value in node.values():
+                walk(value)
+        elif isinstance(node, list):
+            for value in node:
+                walk(value)
+
+    walk(payload.get("output") or payload)
+    return _CITY_COORDS
+
+
+def city_coords(city):
+    """Coordinates for a city, so distances are measured from the right place.
+
+    Falls back to DEFAULT_LATLNG only if the lookup fails - a wrong-city
+    default silently produced "1031 km away" for every Mumbai cinema.
+    """
+    try:
+        return _load_city_coords().get((city or "").strip().lower()) or DEFAULT_LATLNG
+    except Exception:
+        return DEFAULT_LATLNG
+
+
 def list_cities():
     """Every city the chain sells tickets in."""
     payload = _post("content/city", {"lat": DEFAULT_LATLNG[0], "lng": DEFAULT_LATLNG[1]})
@@ -81,8 +118,9 @@ def list_cities():
 
 def list_cinemas(city, lat=None, lng=None, query=""):
     """Cinemas in a city, nearest first. `query` filters on the name."""
-    lat = lat or DEFAULT_LATLNG[0]
-    lng = lng or DEFAULT_LATLNG[1]
+    fallback = city_coords(city)
+    lat = lat or fallback[0]
+    lng = lng or fallback[1]
     payload = _post(
         "content/cinemas",
         {"city": city, "lat": str(lat), "lng": str(lng), "text": ""},
@@ -119,9 +157,10 @@ def list_cinemas(city, lat=None, lng=None, query=""):
 
 def now_showing(city, lat=None, lng=None):
     """Films currently playing in a city."""
+    fallback = city_coords(city)
     payload = _post(
         "content/nowshowing",
-        {"city": city, "lat": str(lat or DEFAULT_LATLNG[0]), "lng": str(lng or DEFAULT_LATLNG[1])},
+        {"city": city, "lat": str(lat or fallback[0]), "lng": str(lng or fallback[1])},
         city,
     )
     films = []
@@ -157,11 +196,12 @@ def day_sessions(city, cinema_id, date, lat=None, lng=None):
     most useful signal this API gives. A network failure returns a different
     error so callers never mistake a flake for a closed window.
     """
+    fallback = city_coords(city)
     body = {
         "city": city,
         "cid": str(cinema_id),
-        "lat": str(lat or DEFAULT_LATLNG[0]),
-        "lng": str(lng or DEFAULT_LATLNG[1]),
+        "lat": str(lat or fallback[0]),
+        "lng": str(lng or fallback[1]),
         "dated": date,
         "qr": "NO",
         "cineType": "",
