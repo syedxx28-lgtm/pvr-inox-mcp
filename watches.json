@@ -18,7 +18,8 @@
    "seat_detail": true,
    "zone_rows": ["F", "E", "D", "C"],
    "zone_seats": [11, 21],
-   "min_adjacent": 1
+   "min_adjacent": 1,
+   "min_lead_minutes": 90
   }
  ]
 }

@@ -143,6 +143,11 @@ can reach further out for the same work.
 zone. Omit both and it derives itself from the auditorium's geometry, which is
 usually what you want - see above.
 
+`min_lead_minutes` suppresses alerts for shows starting sooner than that - an
+alert for a show beginning in 11 minutes at a cinema 25 km away is accurate and
+useless. Those shows are still tracked in state, just not alerted on. Omit it
+to alert regardless.
+
 `min_adjacent` is how many seats side by side you need; `seats_freed` fires only
 when a show crosses that threshold from below, so a show already above it does
 not re-fire every run. Set it to `0` to switch that off.

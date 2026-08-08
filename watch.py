@@ -174,9 +174,23 @@ ICON = "\U0001F6A8"
 AVAILABLE = {"available", "filling up fast", "filling fast"}
 
 
+def lead_ok(show, watch, now_ms):
+    """Is there still time to actually get there?
+
+    An alert for a show starting in 11 minutes at a cinema 25 km away is
+    accurate and useless. Shows nearer than min_lead_minutes are still tracked
+    in state - they are just not worth waking someone for.
+    """
+    need = watch.get("min_lead_minutes", 0)
+    if not need or not show.get("ts"):
+        return True
+    return (show["ts"] - now_ms) >= need * 60000
+
+
 def diff(watch, previous, snapshot):
     """Compare against the last run and return a list of alert-worthy events."""
     events = []
+    now_ms = int(datetime.datetime.now().timestamp() * 1000)
     open_now = {d: v for d, v in snapshot.items() if v is not None}
 
     for date_str in sorted(open_now):
@@ -185,17 +199,21 @@ def diff(watch, previous, snapshot):
 
         if was is None:
             # None here means "not in previous state at all" -> the window opened.
-            events.append(
-                {
-                    "kind": "new_date",
-                    "date": date_str,
-                    "shows": sorted(shows.values(), key=lambda s: s.get("ts", 0)),
-                }
-            )
+            in_time = [s for s in shows.values() if lead_ok(s, watch, now_ms)]
+            if in_time:
+                events.append(
+                    {
+                        "kind": "new_date",
+                        "date": date_str,
+                        "shows": sorted(in_time, key=lambda s: s.get("ts", 0)),
+                    }
+                )
             continue
 
         for key, show in sorted(shows.items()):
             before = was.get(key)
+            if not lead_ok(show, watch, now_ms):
+                continue
             if before is None:
                 events.append({"kind": "new_show", "date": date_str, "shows": [show]})
                 continue
