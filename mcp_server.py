@@ -19,6 +19,7 @@ from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import Icon, ToolAnnotations
 
 import core
+from starlette.responses import FileResponse
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(HERE, "watches.json")
@@ -70,12 +71,19 @@ Every tool returns a compact table by default. Pass format="json" for the full
 structured result when you need to compute over it rather than report it.
 """
 
-# Inlined as a data URI so the server stays self-contained - no asset host to
-# depend on, and it survives being copied anywhere.
+# Served over HTTPS rather than inlined as a data: URI. Clients commonly refuse
+# to render data: URIs, and PNG is more broadly supported than SVG, so offer a
+# real PNG first with an explicit size, then the SVG. Falls back to the data
+# URI when no public base URL is configured (e.g. local stdio use).
 def _icon():
-    path = os.path.join(HERE, "icon.svg")
+    base = os.environ.get("PVR_MCP_PUBLIC_URL", "").rstrip("/")
+    if base:
+        return [
+            Icon(src=base + "/icon.png", mimeType="image/png", sizes=["512x512"]),
+            Icon(src=base + "/icon.svg", mimeType="image/svg+xml", sizes=["any"]),
+        ]
     try:
-        with open(path, "rb") as fh:
+        with open(os.path.join(HERE, "icon.svg"), "rb") as fh:
             return [
                 Icon(
                     src="data:image/svg+xml;base64," + base64.b64encode(fh.read()).decode(),
@@ -556,6 +564,31 @@ def _today():
     import datetime
 
     return datetime.date.today().isoformat()
+
+
+@mcp.custom_route("/icon.png", methods=["GET"])
+async def _serve_png(_request):
+    return FileResponse(
+        os.path.join(HERE, "icon.png"),
+        media_type="image/png",
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
+
+
+@mcp.custom_route("/icon.svg", methods=["GET"])
+async def _serve_svg(_request):
+    return FileResponse(
+        os.path.join(HERE, "icon.svg"),
+        media_type="image/svg+xml",
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
+
+
+# Some UIs fall back to the origin's favicon when they cannot use the declared
+# icon, so answer that too.
+@mcp.custom_route("/favicon.ico", methods=["GET"])
+async def _serve_favicon(_request):
+    return FileResponse(os.path.join(HERE, "icon.png"), media_type="image/png")
 
 
 def main():

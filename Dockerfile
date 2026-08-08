@@ -15,7 +15,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Only what the server needs. watch.py, notify.py and the watch config stay out
 # of the image - the cron watcher is a separate concern and its tools are not
 # registered remotely anyway.
-COPY core.py mcp_server.py icon.svg ./
+COPY core.py mcp_server.py icon.svg icon.png ./
 
 # Cloud Run injects PORT; the server prefers it over PVR_MCP_PORT.
 EXPOSE 8080
