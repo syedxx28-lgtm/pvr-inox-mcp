@@ -14,6 +14,7 @@ JSON API the PVR web app calls.
 | `new_date` | A date that answered "closed" now has shows. **The booking window just opened.** |
 | `new_show` | An extra session appeared on an already-open date. |
 | `back_in_stock` | A session went from Sold Out back to Available - a cancellation or a released block. |
+| `seats_freed` | A block of `min_adjacent` seats *next to each other* opened up on a show that had none. The one that matters if you need two together. |
 
 ## How it works
 
@@ -28,6 +29,22 @@ and reliable:
 
 Every run polls `horizon_days` forward, keeps the shows matching your filters,
 and diffs against `state.json` from the previous run.
+
+### Seat-level detail
+
+With `seat_detail: true`, each showtime is followed up with
+`POST /api/v1/booking/ticketing/seatlayout` using the `encrypted` token that
+`csessions` returns per session. That gives the full seat map:
+
+- `s == 1` is a free seat, `s == 2` is taken (verified against the rendered map)
+- entries with no seat name (`sn`) are aisles and gaps - these **break**
+  adjacency, since seats either side of an aisle are not "together"
+
+Alerts then read like `293/442 free (34% booked) - 11 together at O10-O20`.
+
+This costs one extra request per showtime, so the calls are issued
+concurrently. Already-started ("Lapsed") shows are skipped - they have no seat
+map. Sold-out ones are still fetched, since that is where a restock shows up.
 
 Note `bookmyshow.com` is fully Cloudflare-gated - every plain request, including
 the mobile-app endpoints with correct headers, returns 403. Going through PVR
@@ -52,11 +69,17 @@ direct avoids that entirely.
    "experience": "imax",
    "language": "English",
    "horizon_days": 12,
-   "alert_on_restock": true
+   "alert_on_restock": true,
+   "seat_detail": true,
+   "min_adjacent": 2
   }
  ]
 }
 ```
+
+`min_adjacent` is how many seats side by side you need; `seats_freed` fires only
+when a show crosses that threshold from below, so a show already sitting on six
+free-together does not re-fire every run. Set it to `0` to switch that off.
 
 `film_contains` is a case-insensitive substring of the film name.
 `experience` matches PVR's key (`imax`, `pxl`, `bigpix`, `4dx`, ...); leave it

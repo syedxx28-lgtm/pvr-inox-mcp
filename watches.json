@@ -13,7 +13,9 @@
    "experience": "imax",
    "language": "English",
    "horizon_days": 12,
-   "alert_on_restock": true
+   "alert_on_restock": true,
+   "seat_detail": true,
+   "min_adjacent": 2
   }
  ]
 }

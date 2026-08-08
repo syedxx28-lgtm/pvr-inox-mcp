@@ -25,6 +25,7 @@ import datetime
 import json
 import os
 import socket
+from concurrent import futures
 import sys
 import urllib.error
 import urllib.request
@@ -46,6 +47,7 @@ socket.getaddrinfo = lambda *a, **kw: [
 # --------------------------------------------------------------------------
 
 PVR_API = "https://api3.pvrcinemas.com/api/v1/booking/content/csessions"
+PVR_SEATS = "https://api3.pvrcinemas.com/api/v1/booking/ticketing/seatlayout"
 
 # The web app sends an empty bearer. It is not a placeholder for a real token -
 # the endpoint 403s without the header and 200s with it blank.
@@ -109,9 +111,61 @@ def pvr_fetch_day(watch, date_str):
                         "ts": show.get("showTimeStamp") or 0,
                         "screen": show.get("screenName", ""),
                         "status": show.get("statusTxt", ""),
+                        "token": show.get("encrypted", ""),
                     }
                 )
     return shows, None
+
+
+def pvr_fetch_seats(token):
+    """Seat map for one session. Returns (summary, error).
+
+    In the layout, s == 1 is a free seat and s == 2 is taken; entries with no
+    seat name are aisles and gaps. Verified against the rendered seat map.
+    """
+    req = urllib.request.Request(
+        PVR_SEATS, json.dumps({"encrypted": token}).encode(), dict(PVR_HEADERS)
+    )
+    try:
+        payload = json.load(urllib.request.urlopen(req, timeout=30))
+    except Exception as exc:
+        return None, "seatmap %s" % exc
+
+    if payload.get("status") != 200 or not payload.get("output"):
+        return None, "seatmap unavailable"
+
+    total = free = 0
+    free_names = []
+    best_run, best_where = 0, ""
+
+    for row in payload["output"].get("rows") or []:
+        if row.get("t") != "seats":
+            continue
+        run = []
+        for seat in row.get("s") or []:
+            name = seat.get("sn")
+            if not name:
+                # Blank grid slot: an aisle or gap. Seats either side of it are
+                # not "together", so this breaks the run rather than skipping.
+                run = []
+                continue
+            total += 1
+            if seat.get("s") == 1:
+                free += 1
+                free_names.append(name)
+                run.append(name)
+                if len(run) > best_run:
+                    best_run, best_where = len(run), "%s-%s" % (run[0], run[-1])
+            else:
+                run = []
+
+    return {
+        "total": total,
+        "free": free,
+        "best_run": best_run,
+        "best_where": best_where,
+        "seats": free_names[:40],
+    }, None
 
 
 def pvr_booking_url(watch, date_str):
@@ -173,13 +227,46 @@ def poll(watch, today, verbose=False):
             continue
 
         hits = {show_key(s): s for s in shows if matches(s, watch)}
+
+        if watch.get("seat_detail"):
+            # One seat-map call per showtime, so fetch them concurrently or a
+            # 5-minute cron spends most of its life waiting on serial requests.
+            # A lapsed show has already started - it has no seat map and can't
+            # be booked. Sold-out ones are still worth fetching, for restocks.
+            todo = [
+                s
+                for s in hits.values()
+                if s.get("token") and s["status"].lower() != "lapsed"
+            ]
+            with futures.ThreadPoolExecutor(max_workers=8) as pool:
+                for show, (seats, err) in zip(
+                    todo, pool.map(lambda s: pvr_fetch_seats(s["token"]), todo)
+                ):
+                    if err:
+                        print(
+                            "  %s %s: %s" % (date_str, show["time"], err),
+                            file=sys.stderr,
+                        )
+                    else:
+                        show["seats"] = seats
+
         if verbose:
             print(
                 "  %s  %d show(s)  %s"
                 % (
                     date_str,
                     len(hits),
-                    " ".join("%s[%s]" % (s["time"], s["status"]) for s in hits.values()),
+                    "  ".join(
+                        "%s[%s%s]"
+                        % (
+                            s["time"],
+                            s["status"],
+                            " %d/%d free" % (s["seats"]["free"], s["seats"]["total"])
+                            if s.get("seats")
+                            else "",
+                        )
+                        for s in hits.values()
+                    ),
                 )
             )
         if hits:
@@ -219,12 +306,27 @@ def diff(watch, previous, snapshot):
             before = was.get(key)
             if before is None:
                 events.append({"kind": "new_show", "date": date_str, "shows": [show]})
-            elif watch.get("alert_on_restock", True):
+                continue
+
+            if watch.get("alert_on_restock", True):
                 old = (before.get("status") or "").lower()
                 new = (show.get("status") or "").lower()
                 if old not in AVAILABLE and new in AVAILABLE:
                     events.append(
                         {"kind": "back_in_stock", "date": date_str, "shows": [show]}
+                    )
+                    continue
+
+            # A sold-out show that frees up a pair is the case worth waking for.
+            # Alert only when the best adjacent block crosses the threshold from
+            # below, so a show sitting at 6-together does not re-fire every run.
+            need = watch.get("min_adjacent", 0)
+            if need and show.get("seats") and before.get("seats"):
+                was_run = before["seats"].get("best_run", 0)
+                now_run = show["seats"].get("best_run", 0)
+                if was_run < need <= now_run:
+                    events.append(
+                        {"kind": "seats_freed", "date": date_str, "shows": [show]}
                     )
 
     return events
@@ -238,7 +340,20 @@ HEADLINES = {
     "new_date": ":rotating_light: Booking just opened",
     "new_show": ":new: Show added",
     "back_in_stock": ":recycle: Back in stock",
+    "seats_freed": ":seat: Seats together opened up",
 }
+
+
+def seat_summary(show):
+    """'37/442 free - 11 together at O10-O20', or '' if seats weren't fetched."""
+    s = show.get("seats")
+    if not s or not s.get("total"):
+        return ""
+    pct = 100.0 * (s["total"] - s["free"]) / s["total"]
+    out = "%d/%d free (%.0f%% booked)" % (s["free"], s["total"], pct)
+    if s.get("best_run"):
+        out += " - %d together at %s" % (s["best_run"], s["best_where"])
+    return out
 
 
 def format_slack(watch, events):
@@ -255,6 +370,9 @@ def format_slack(watch, events):
                 bits.append(s["screen"])
             if s["status"]:
                 bits.append(s["status"])
+            seats = seat_summary(s)
+            if seats:
+                bits.append(seats)
             lines.append("   - %s" % "  |  ".join(bits))
 
     lines.append("<%s|Book now>" % url)
