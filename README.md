@@ -207,10 +207,20 @@ gcloud run deploy pvr-inox-mcp --source . --region=asia-south1 \
 PVR_MCP_PATH=/mcp,PVR_MCP_ALLOWED_HOSTS=<your-run-hostname>"
 ```
 
-`PVR_MCP_ALLOWED_HOSTS` is required. MCP enables DNS-rebinding protection by
-default, which validates the `Host` header against localhost only - a hosted
-deployment answers **HTTP 421** until its own hostname is listed. `*` disables
-the check entirely.
+`PVR_MCP_ALLOWED_HOSTS` is required, and for a public connector it should be
+`*`. MCP enables DNS-rebinding protection by default, which checks **two**
+headers:
+
+- **`Host`** - validated against localhost only, so a hosted deployment answers
+  **HTTP 421** until its own hostname is listed.
+- **`Origin`** - a browser-based client such as Claude's connector sends
+  `Origin: https://claude.ai`, which is rejected with **HTTP 403 "Invalid
+  Origin header"** unless that origin is allowed. The connector just spins.
+
+A client called with no `Origin` header at all passes both checks, so testing
+with curl or a Python client will not reveal the second problem. `*` turns the
+protection off, which is the right setting for an intentionally public,
+read-only endpoint.
 
 ### Serving it remotely
 
