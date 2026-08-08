@@ -385,10 +385,19 @@ def main():
     ap.add_argument(
         "--interval", type=int, default=60, help="seconds between polls in --stream"
     )
+    ap.add_argument(
+        "--state",
+        default=STATE_PATH,
+        help="state file to use. Point an in-session --stream at its own copy "
+        "so it does not fight the cron over the committed one.",
+    )
     args = ap.parse_args()
 
     with open(CONFIG_PATH) as fh:
         config = json.load(fh)
+
+    global STATE_PATH
+    STATE_PATH = args.state
 
     state = {}
     if os.path.exists(STATE_PATH):
