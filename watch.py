@@ -24,187 +24,24 @@ import argparse
 import datetime
 import json
 import os
-import socket
-from concurrent import futures
 import sys
-import urllib.error
-import urllib.request
+from concurrent import futures
+
+import core
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(HERE, "watches.json")
 STATE_PATH = os.path.join(HERE, "state.json")
 
-# Google/Cloudflare-fronted hosts hang for 75s on a black-holed IPv6 route
-# before falling back. Pin every lookup to A records.
-_getaddrinfo = socket.getaddrinfo
-socket.getaddrinfo = lambda *a, **kw: [
-    r for r in _getaddrinfo(*a, **kw) if r[0] == socket.AF_INET
-]
-
-
-# --------------------------------------------------------------------------
-# PVR / INOX provider
-# --------------------------------------------------------------------------
-
-PVR_API = "https://api3.pvrcinemas.com/api/v1/booking/content/csessions"
-PVR_SEATS = "https://api3.pvrcinemas.com/api/v1/booking/ticketing/seatlayout"
-
-# The web app sends an empty bearer. It is not a placeholder for a real token -
-# the endpoint 403s without the header and 200s with it blank.
-PVR_HEADERS = {
-    "Content-Type": "application/json",
-    "Accept": "application/json, text/plain, */*",
-    "Authorization": "Bearer ",
-    "chain": "PVR",
-    "country": "INDIA",
-    "appVersion": "1.0",
-    "platform": "WEBSITE",
-    "flow": "PVRINOX",
-}
-
 
 def pvr_fetch_day(watch, date_str):
-    """Return the list of shows at this cinema on this date.
-
-    A date that is not yet open for booking answers 500, which is the signal
-    we actually care about, so it is reported as 'closed' rather than raised.
-    """
-    body = json.dumps(
-        {
-            "city": watch["city"],
-            "cid": str(watch["cinema_id"]),
-            "lat": str(watch["lat"]),
-            "lng": str(watch["lng"]),
-            "dated": date_str,
-            "qr": "NO",
-            "cineType": "",
-            "cineTypeQR": "",
-        }
-    ).encode()
-
-    headers = dict(PVR_HEADERS, city=watch["city"])
-    req = urllib.request.Request(PVR_API, body, headers)
-    try:
-        payload = json.load(urllib.request.urlopen(req, timeout=30))
-    except urllib.error.HTTPError as exc:
-        return None, "http %s" % exc.code
-    except Exception as exc:  # network flake - treat as unknown, never as closed
-        return None, "error %s" % exc
-
-    if payload.get("status") != 302 or not payload.get("output"):
-        return None, "closed"
-
-    shows = []
-    for movie in payload["output"].get("cinemaMovieSessions") or []:
-        for exp in movie.get("experienceSessions") or []:
-            for show in exp.get("shows") or []:
-                shows.append(
-                    {
-                        "session_id": show.get("sessionId"),
-                        "movie_id": show.get("movieId"),
-                        "film": (movie.get("movieRe") or {}).get("filmName", ""),
-                        "experience": exp.get("experienceKey", ""),
-                        "format": show.get("movieFormat", ""),
-                        "language": show.get("language", ""),
-                        "date": show.get("showDate"),
-                        "time": show.get("showTime"),
-                        "ts": show.get("showTimeStamp") or 0,
-                        "screen": show.get("screenName", ""),
-                        "status": show.get("statusTxt", ""),
-                        "token": show.get("encrypted", ""),
-                    }
-                )
-    return shows, None
-
-
-def in_zone(watch, row_name, seat_number):
-    """Is this seat inside the 'good seats' zone?
-
-    The zone is the rows you actually want to sit in, intersected with a range
-    of seat numbers. On this layout the centre block between the two aisles is
-    seats 11-21, so ["F","E","D","C"] x [11,21] is back-ish and dead centre.
-    With no zone configured every seat qualifies.
-    """
-    rows = watch.get("zone_rows")
-    if rows and row_name not in rows:
-        return False
-    lo, hi = watch.get("zone_seats", [0, 9999])
-    return lo <= seat_number <= hi
+    return core.day_sessions(
+        watch["city"], watch["cinema_id"], date_str, watch.get("lat"), watch.get("lng")
+    )
 
 
 def pvr_fetch_seats(token, watch):
-    """Seat map for one session. Returns (summary, error).
-
-    In the layout, s == 1 is a free seat and s == 2 is taken; entries with no
-    seat name are aisles and gaps. Verified against the rendered seat map.
-
-    Counts the whole auditorium and the zone separately - the zone numbers are
-    the ones worth alerting on, the totals are just context.
-    """
-    req = urllib.request.Request(
-        PVR_SEATS, json.dumps({"encrypted": token}).encode(), dict(PVR_HEADERS)
-    )
-    try:
-        payload = json.load(urllib.request.urlopen(req, timeout=30))
-    except Exception as exc:
-        return None, "seatmap %s" % exc
-
-    if payload.get("status") != 200 or not payload.get("output"):
-        return None, "seatmap unavailable"
-
-    total = free = zone_total = zone_free = 0
-    zone_names = []
-    best_run, best_where = 0, ""
-
-    for row in payload["output"].get("rows") or []:
-        if row.get("t") != "seats":
-            continue
-
-        run = []
-        for seat in row.get("s") or []:
-            name = seat.get("sn")
-            if not name:
-                # Blank grid slot: an aisle or gap. Seats either side of it are
-                # not "together", so this breaks the run rather than skipping.
-                run = []
-                continue
-
-            total += 1
-            try:
-                number = int(seat.get("displaynumber") or 0)
-            except ValueError:
-                number = 0
-            is_free = seat.get("s") == 1
-            if is_free:
-                free += 1
-
-            if not in_zone(watch, row.get("n"), number):
-                # Outside the zone: never counted, and it breaks adjacency so a
-                # run can't straddle the zone edge.
-                run = []
-                continue
-
-            zone_total += 1
-            if is_free:
-                zone_free += 1
-                zone_names.append(name)
-                run.append(name)
-                if len(run) > best_run:
-                    best_run, best_where = len(run), (
-                        run[0] if len(run) == 1 else "%s-%s" % (run[0], run[-1])
-                    )
-            else:
-                run = []
-
-    return {
-        "total": total,
-        "free": free,
-        "zone_total": zone_total,
-        "zone_free": zone_free,
-        "best_run": best_run,
-        "best_where": best_where,
-        "seats": zone_names[:40],
-    }, None
+    return core.seat_report(token, watch.get("zone_rows"), watch.get("zone_seats"))
 
 
 def pvr_booking_url(watch, date_str):
@@ -394,26 +231,7 @@ HEADLINES = {
 
 
 def seat_summary(show):
-    """Zone first, because that is the only part worth acting on.
-
-    'GOOD SEATS: 3 together at D14-D16 (7 free in zone, 34% booked overall)'
-    """
-    s = show.get("seats")
-    if not s or not s.get("total"):
-        return ""
-
-    pct = 100.0 * (s["total"] - s["free"]) / s["total"]
-    context = "%d free in zone, %.0f%% booked overall" % (s["zone_free"], pct)
-
-    if not s.get("best_run"):
-        return "no good seats (%s)" % context
-    if s["best_run"] == 1:
-        return "GOOD SEAT: %s (%s)" % (s["best_where"], context)
-    return "GOOD SEATS: %d together at %s (%s)" % (
-        s["best_run"],
-        s["best_where"],
-        context,
-    )
+    return core.describe_seats(show.get("seats"))
 
 
 def format_slack(watch, events):

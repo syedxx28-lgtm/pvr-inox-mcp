@@ -1,0 +1,2 @@
+# core.py and watch.py are stdlib-only. This is only for the MCP server.
+mcp>=1.0

@@ -7,6 +7,18 @@ the window opened.
 Stdlib-only Python. No pip install, no browser, no scraping - it reads the same
 JSON API the PVR web app calls.
 
+Two ways in:
+
+- **`watch.py`** - the cron watcher. Polls on a schedule, alerts Slack.
+- **`mcp_server.py`** - an MCP server, so you can just *ask*: what's showing,
+  where are the good seats, is that date on sale yet. Any city in India.
+
+Both sit on `core.py`, which is the actual API client.
+
+**Coverage: the PVR/INOX chain only**, across ~116 Indian cities. Independent
+cinemas and other chains are not here, and neither is BookMyShow - it blocks
+automated requests outright.
+
 ## What it alerts on
 
 | Event | Meaning |
@@ -62,6 +74,23 @@ into three blocks by two aisles - the centre block is seats **11-21**:
 
 A seat outside the zone also **breaks** adjacency, so a run can never straddle
 the zone edge and report seats you don't want as part of a block.
+
+#### The zone derives itself
+
+Row letters mean different things in different houses - Palazzo's AUDI 5 runs
+O at the front to A at the back over 15 rows; Phoenix's IMAX runs P to A over
+16. So hardcoded rows never transfer.
+
+With `zone_rows` / `zone_seats` omitted, the zone is computed from the
+auditorium's own geometry:
+
+- **rows** 60-85% of the way back from the screen
+- **seats** the aisle-delimited block containing the row's midpoint - the
+  actual centre section, not a naive "middle half" that would straddle aisles
+
+That reproduces a hand-picked `F,E,D,C` + `11-21` exactly on Palazzo (44
+seats), and independently derives `G,F,E,D,C` (80 seats) on Phoenix. Set the
+keys explicitly only to override it.
 
 Alerts then read
 `GOOD SEATS: 11 together at D11-D21 (40 free in zone, 15% booked overall)`.
@@ -142,6 +171,42 @@ python watch.py --watch "<name>"       # just one watch
 
 The first run records a baseline silently - otherwise every currently-open date
 would fire as a discovery.
+
+## MCP server
+
+Exposes the same core as tools, so any MCP client can ask instead of you
+writing throwaway scripts.
+
+```bash
+pip install -r requirements.txt
+claude mcp add showwatch -- python3 /path/to/showwatch/mcp_server.py
+```
+
+| Tool | Answers |
+|---|---|
+| `showwatch_cities` | Which cities the chain covers |
+| `showwatch_cinemas` | Cinemas in a city + the `cinema_id` everything else needs |
+| `showwatch_now_showing` | What's playing, with certificate, length, formats |
+| `showwatch_showtimes` | Showtimes at a cinema on a date |
+| `showwatch_seats` | **Live seat availability, zone counted separately** - the one that matters |
+| `showwatch_is_open` | Is that date on sale yet |
+
+`showwatch_seats` takes `seat_map=true` for an ASCII auditorium, which makes
+the problem obvious at a glance (`O` free in zone, `x` taken in zone, `o` free
+outside it, `.` taken outside it):
+
+```
+                    SCREEN
+ P        oo  ooooooooooooooo   oooo         front: wide open
+ ...
+ G    ......  xxxxxxxxxxxxxxxx  .......o     zone: solid
+ F    ......  xxxxxxxxxxxxxxxx  ........
+ E    ......  xxxxxxxxxxxxxxxx  ........
+```
+
+That show reads "Filling Up Fast" with 75% booked - and not one free seat
+worth having. The server's instructions tell the client to never call a show
+bookable on show-level status alone.
 
 ## Deploy
 
