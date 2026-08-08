@@ -179,6 +179,21 @@ python watch.py --watch "<name>"       # just one watch
 The first run records a baseline silently - otherwise every currently-open date
 would fire as a discovery.
 
+## Installing as an Agent Plugin
+
+The repo is a conformant [Agent Plugins](https://agent-plugins.org) v1.0.0
+package - `plugin.json` plus `mcp.json` at the root - so a conforming client
+can install it from the directory rather than being wired up by hand. Both
+manifests validate against the published schemas.
+
+`mcp.json` points at the hosted `streamable-http` endpoint deliberately: that
+needs no Python, no `pip install` and no local process, so the plugin works the
+moment it is added. Use the stdio setup below if you want the watch-management
+tools, which the remote endpoint does not expose.
+
+Note the spec is a **Working Draft**, and these two files are additive - they
+change nothing about how the server runs.
+
 ## MCP server
 
 Exposes the same core as tools, so any MCP client can ask instead of you

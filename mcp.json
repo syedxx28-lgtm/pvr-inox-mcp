@@ -1,0 +1,9 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+  "mcpServers": {
+    "pvr-inox": {
+      "type": "streamable-http",
+      "url": "https://pvr-inox-mcp-612942167838.asia-south1.run.app/mcp"
+    }
+  }
+}
