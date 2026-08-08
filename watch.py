@@ -170,6 +170,7 @@ def poll(watch, today, verbose=False):
 # Diffing
 # --------------------------------------------------------------------------
 
+ICON = "\U0001F6A8"
 AVAILABLE = {"available", "filling up fast", "filling fast"}
 
 
@@ -241,29 +242,65 @@ def seat_summary(show):
     return core.describe_seats(show.get("seats"))
 
 
+def short_seats(show):
+    """The seat read at a glance: '11 together - D11-D21'.
+
+    A phone notification gets three or four lines before it truncates, so this
+    drops everything you already know (the screen, the film, the percentage)
+    and keeps only what decides whether you stop what you're doing.
+    """
+    report = show.get("seats")
+    if not report:
+        return show.get("status", "")
+    if not report.get("best_run"):
+        return "no good seats"
+    if report["best_run"] == 1:
+        return "1 seat - %s" % report["best_where"]
+    return "%d together - %s" % (report["best_run"], report["best_where"])
+
+
 def format_alert(watch, events):
-    """Plain text, so it renders the same on every channel. Returns (title, body, url)."""
+    """Plain text, so it renders the same on every channel.
+
+    Returns (title, body, url, priority). The title carries the event and the
+    date, because on a lock screen that is often all you read.
+    """
     url = PROVIDERS[watch.get("provider", "pvr")][1](watch, events[0]["date"])
 
-    lines = []
+    def pretty(date_str):
+        return datetime.date.fromisoformat(date_str).strftime("%a %-d %b")
+
+    if len(events) == 1:
+        ev = events[0]
+        title = "%s - %s" % (HEADLINES[ev["kind"]], pretty(ev["date"]))
+    else:
+        dates = sorted({pretty(e["date"]) for e in events})
+        title = "%s %d updates - %s" % (
+            ICON,
+            len(events),
+            ", ".join(dates[:3]) + ("..." if len(dates) > 3 else ""),
+        )
+
+    lines = [watch["name"]]
     for ev in events:
-        pretty = datetime.date.fromisoformat(ev["date"]).strftime("%a %d %b")
-        lines.append("%s - %s" % (HEADLINES[ev["kind"]], pretty))
+        if len(events) > 1:
+            lines.append("")
+            lines.append("%s - %s" % (HEADLINES[ev["kind"]], pretty(ev["date"])))
+        lines.append("")
         for s in ev["shows"]:
-            bits = [s["time"]]
-            if s["screen"]:
-                bits.append(s["screen"])
-            if s["status"]:
-                bits.append(s["status"])
-            seats = seat_summary(s)
-            if seats:
-                bits.append(seats)
-            lines.append("   - %s" % "  |  ".join(bits))
+            # Two columns, so the times line up and the eye runs straight down
+            # the seat column.
+            lines.append("%-9s %s" % (s["time"], short_seats(s)))
 
-    return watch["name"], "\n".join(lines), url
+    # Anything that needs you to act now goes at max priority, so it breaks
+    # through Do Not Disturb. An extra show on an already-open date does not.
+    urgent = {"new_date", "seats_freed"}
+    priority = 5 if any(e["kind"] in urgent for e in events) else 4
+
+    return title, "\n".join(lines), url, priority
 
 
-def deliver(title, body, url):
+def deliver(title, body, url, priority=5):
     """True only if at least one channel actually took it."""
     channels = notify.configured()
     if not channels:
@@ -273,7 +310,7 @@ def deliver(title, body, url):
         )
         return False
 
-    sent, failed = notify.send(title, body, url)
+    sent, failed = notify.send(title, body, url, priority)
     for problem in failed:
         print("  delivery failed - %s" % problem, file=sys.stderr)
     if sent:
@@ -320,10 +357,10 @@ def main():
             events = diff(watch, previous, snapshot)
             if events:
                 fired += len(events)
-                title, body, url = format_alert(watch, events)
+                title, body, url, priority = format_alert(watch, events)
                 if args.dry_run:
                     print("%s\n%s\n%s" % (title, body, url))
-                elif not deliver(title, body, url):
+                elif not deliver(title, body, url, priority):
                     # Advancing state here would swallow the opening for good -
                     # it can only ever be reported once. Leave the old state so
                     # the next run fires it again.

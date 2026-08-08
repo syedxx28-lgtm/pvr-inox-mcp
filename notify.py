@@ -40,7 +40,7 @@ def _post_json(url, payload, headers=None, timeout=20):
 # --------------------------------------------------------------------------
 
 
-def _slack(title, body, url):
+def _slack(title, body, url, priority=5):
     hook = os.environ.get("SLACK_WEBHOOK_URL")
     if not hook:
         return False
@@ -51,7 +51,7 @@ def _slack(title, body, url):
     return True
 
 
-def _discord(title, body, url):
+def _discord(title, body, url, priority=5):
     hook = os.environ.get("DISCORD_WEBHOOK_URL")
     if not hook:
         return False
@@ -62,7 +62,7 @@ def _discord(title, body, url):
     return True
 
 
-def _telegram(title, body, url):
+def _telegram(title, body, url, priority=5):
     token = os.environ.get("TELEGRAM_BOT_TOKEN")
     chat = os.environ.get("TELEGRAM_CHAT_ID")
     if not (token and chat):
@@ -77,7 +77,7 @@ def _telegram(title, body, url):
     return True
 
 
-def _ntfy(title, body, url):
+def _ntfy(title, body, url, priority=5):
     topic = os.environ.get("NTFY_TOPIC")
     if not topic:
         return False
@@ -88,16 +88,18 @@ def _ntfy(title, body, url):
         "message": body,
         # High priority so it breaks through a silenced phone - the whole
         # point is catching a window that closes in minutes.
-        "priority": 5,
-        "tags": ["ticket"],
+        "priority": priority,
+        # No "tags": ntfy renders them as an emoji before the title, which
+        # collides with the emoji the title already carries.
     }
     if url:
+        payload["click"] = url  # tapping the notification opens booking
         payload["actions"] = [{"action": "view", "label": "Book now", "url": url}]
     _post_json(server, payload)
     return True
 
 
-def _pushover(title, body, url):
+def _pushover(title, body, url, priority=5):
     user = os.environ.get("PUSHOVER_USER_KEY")
     token = os.environ.get("PUSHOVER_APP_TOKEN")
     if not (user and token):
@@ -107,7 +109,8 @@ def _pushover(title, body, url):
         "user": user,
         "title": title,
         "message": body,
-        "priority": 1,
+        # Pushover caps at 2; map ntfy's 1-5 onto it.
+        "priority": 1 if priority >= 5 else 0,
     }
     if url:
         payload["url"] = url
@@ -116,7 +119,7 @@ def _pushover(title, body, url):
     return True
 
 
-def _email(title, body, url):
+def _email(title, body, url, priority=5):
     host = os.environ.get("SMTP_HOST")
     user = os.environ.get("SMTP_USER")
     password = os.environ.get("SMTP_PASS")
@@ -140,7 +143,7 @@ def _email(title, body, url):
     return True
 
 
-def _webhook(title, body, url):
+def _webhook(title, body, url, priority=5):
     hook = os.environ.get("GENERIC_WEBHOOK_URL")
     if not hook:
         return False
@@ -148,7 +151,7 @@ def _webhook(title, body, url):
     return True
 
 
-def _github_issue(title, body, url):
+def _github_issue(title, body, url, priority=5):
     """Zero extra accounts: open an issue on the repo the cron already runs in."""
     token = os.environ.get("GITHUB_TOKEN")
     repo = os.environ.get("GITHUB_REPOSITORY")
@@ -197,7 +200,7 @@ def configured():
     return [name for name, _ in CHANNELS if _is_configured(name)]
 
 
-def send(title, body, url=""):
+def send(title, body, url="", priority=5):
     """Send to every configured channel. Returns (sent_to, failures).
 
     Delivery to at least one channel is what lets the caller advance state. An
@@ -209,7 +212,7 @@ def send(title, body, url=""):
         if not _is_configured(name):
             continue
         try:
-            if fn(title, body, url):
+            if fn(title, body, url, priority):
                 sent.append(name)
         except Exception as exc:
             failed.append("%s: %s" % (name, exc))
