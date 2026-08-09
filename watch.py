@@ -75,9 +75,12 @@ def matches(show, watch):
     if want_exp and show["experience"] != want_exp:
         return False
 
+    # Accept either "English" or "en" in config; shows now carry ISO codes.
     want_lang = watch.get("language", "")
-    if want_lang and (show["language"] or "").lower() != want_lang.lower():
-        return False
+    if want_lang:
+        wanted = core.lang_code(want_lang) or str(want_lang).lower()
+        if (show.get("language") or "") != wanted:
+            return False
 
     return True
 

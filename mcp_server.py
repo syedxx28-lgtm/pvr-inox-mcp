@@ -50,11 +50,15 @@ Things that matter when answering:
   enough for the party, with a ready-made zone_rows to re-call with. Do that
   before telling anyone a show is unusable. Always pass party_size.
 
-- LANGUAGE: pvr_now_showing lists RELEASE languages, which routinely include
-  languages with zero showtimes in that city - a film listed "Tamil, English"
-  can be 100% Tamil on the schedule. The authority is the title suffix in
-  pvr_showtimes, e.g. "(TAMIL)", "(3D ENGLISH WITH ENGLISH SUBTITLE...)".
-  Never tell a user an English show exists on the strength of the release list.
+- LANGUAGE has THREE sources and only one is trustworthy. The release list in
+  pvr_now_showing is wrong often enough to be dangerous. The upstream per-show
+  language field is ALSO wrong - 27 shows titled "...(TAMIL)" reported
+  "English" in one Chennai sample. The authority is the TITLE parenthetical,
+  which is what the box office displays. pvr_showtimes exposes `language` as an
+  ISO code derived from the title, with `language_source` and
+  `language_disputed` so you can see when the upstream field disagreed.
+  Filter with language="en"; a show whose language is unknown is never a match.
+  Never tell a user an English show exists on the strength of a release list.
 
 - ERRORS START WITH "ERROR <CODE>:" and are not availability facts.
   CITY_NOT_SERVICED, CINEMA_NOT_FOUND, DATE_IN_PAST, BEYOND_BOOKING_WINDOW,
@@ -198,10 +202,24 @@ def _out(payload, text, fmt):
 
 
 @mcp.tool(annotations=_LOOKUP)
-def pvr_cities() -> str:
-    """List every city where PVR/INOX sells tickets."""
-    cities = core.list_cities()
-    return "%d cities:\n%s" % (len(cities), ", ".join(cities))
+def pvr_cities(format: str = "text") -> str:
+    """Every city where PVR/INOX sells tickets, flagged city vs metro roll-up.
+
+    Roll-ups overlap their constituents - summing show counts across the raw
+    list double-counts cinemas. De-duplicate by cinema id, never by city name.
+    """
+    records = core.city_records()
+    rollups = [r for r in records if r["type"] == "metro_rollup"]
+    plain = [r for r in records if r["type"] == "city"]
+
+    lines = ["%d cities (%d metro roll-ups)" % (len(records), len(rollups))]
+    if rollups:
+        lines.append("\nMETRO ROLL-UPS - overlap the cities listed after them:")
+        for r in rollups:
+            lines.append("  %-16s covers: %s" % (r["name"], ", ".join(r["subcities"]) or "(unnamed constituents)"))
+    lines.append("\nCITIES:")
+    lines.append("  " + ", ".join(r["name"] for r in plain))
+    return _out(records, "\n".join(lines), format)
 
 
 @mcp.tool(annotations=_LOOKUP)
@@ -269,7 +287,9 @@ def pvr_showtimes(
     cinema_id: str,
     date: str,
     film: str = "",
+    language: str = "",
     experience: str = "",
+    bookable_only: bool = True,
     lat: str = "",
     lng: str = "",
     format: str = "text",
@@ -300,10 +320,41 @@ def pvr_showtimes(
         return _err("UPSTREAM_ERROR", "Could not read showtimes: %s" % err)
 
     if film:
-        shows = [s for s in shows if film.upper() in (s["film"] or "").upper()]
+        needle = film.upper()
+        shows = [
+            s for s in shows
+            if needle in (s["film"] or "").upper()
+            or needle in (s.get("title") or "").upper()
+            or needle == str(s.get("canonical_film_id") or "")
+        ]
+    if language:
+        wanted = core.lang_code(language) or language.lower()
+        # Unknown language is never treated as a match - a null must not pass.
+        shows = [s for s in shows if s.get("language") == wanted]
     if experience:
         shows = [s for s in shows if s["experience"] == experience]
+
+    # R-P0-6: unbookable shows are excluded by default, with a count so the
+    # caller can say "3 shows, all sold out" without another call.
+    excluded = {}
+    if bookable_only:
+        keep = []
+        for s in shows:
+            state = (s["status"] or "").lower()
+            if "housefull" in state or "sold" in state:
+                excluded["sold_out"] = excluded.get("sold_out", 0) + 1
+            elif state == "lapsed" or not s["token"]:
+                excluded["closed"] = excluded.get("closed", 0) + 1
+            else:
+                keep.append(s)
+        shows = keep
+
     if not shows:
+        if excluded:
+            return _err("NO_BOOKABLE_SHOWS",
+                        "Shows exist at cinema %s on %s but none are bookable." % (cinema_id, date),
+                        excluded=excluded,
+                        hint="Pass bookable_only=false to see them.")
         return "No matching shows at cinema %s on %s (the date IS on sale)." % (cinema_id, date)
 
     # Titles are NOT truncated: the language and subtitle information is
@@ -312,21 +363,24 @@ def pvr_showtimes(
     # multilingual market cares most about.
     width = max([len(s["film"] or "") for s in shows] + [30])
     lines = [
-        "%-*s %-9s %-8s %-10s %s" % (width, "FILM", "TIME", "FORMAT", "SCREEN", "STATUS"),
+        "%-*s %-9s %-5s %-8s %-10s %s" % (width, "FILM", "TIME", "LANG", "FORMAT", "SCREEN", "STATUS"),
         "-" * (width + 42),
     ]
     for s in shows:
         lines.append(
-            "%-*s %-9s %-8s %-10s %s"
+            "%-*s %-9s %-5s %-8s %-10s %s"
             % (
                 width,
                 s["film"] or "",
                 s["time"],
+                s.get("language") or "?",
                 s["experience"] or s["format"] or "-",
                 s["screen"][:10],
                 s["status"],
             )
         )
+    if excluded:
+        lines.append("\nexcluded (not bookable): %s" % json.dumps(excluded))
     lines.append(
         "\nLanguage is in the title suffix and is the SCHEDULE language - trust it "
         "over the release languages in pvr_now_showing, which list what the film "

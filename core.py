@@ -154,23 +154,56 @@ def city_coords(city):
         return DEFAULT_LATLNG
 
 
-def list_cities():
-    """Every city the chain sells tickets in."""
+def city_records():
+    """Every city, with enough structure to aggregate without double-counting.
+
+    Some entries are metro roll-ups: `Mumbai-All` reports ~1,961 shows where
+    `Mumbai` reports ~1,624, and Thane / Navi Mumbai / Kalyan are ALSO listed
+    separately. Summing the raw list counts the same cinema several times, so
+    each record carries a type and roll-ups name their constituents.
+    """
     payload = _post("content/city", {"lat": DEFAULT_LATLNG[0], "lng": DEFAULT_LATLNG[1]})
-    found = set()
+    found = {}
 
     def walk(node):
         if isinstance(node, dict):
-            for key, value in node.items():
-                if key in ("name", "cityName") and isinstance(value, str):
-                    found.add(value)
+            name = node.get("name")
+            if name and (node.get("lat") or node.get("id")):
+                key = str(name).strip()
+                found.setdefault(key, {
+                    "name": key,
+                    "id": node.get("id"),
+                    "state": node.get("state") or "",
+                    "cinemas": node.get("cinemaCount"),
+                    "lat": node.get("lat"),
+                    "lng": node.get("lng"),
+                    "subcities": [c.get("name") for c in (node.get("subcities") or []) if c.get("name")],
+                })
+            for value in node.values():
                 walk(value)
         elif isinstance(node, list):
             for value in node:
                 walk(value)
 
     walk(payload.get("output") or payload)
-    return sorted(found)
+
+    for rec in found.values():
+        rollup = bool(rec["subcities"]) or rec["name"].lower().endswith("-all")
+        rec["type"] = "metro_rollup" if rollup else "city"
+        if rollup and not rec["subcities"]:
+            # "Mumbai-All" style: the constituents are the other entries whose
+            # name shares the stem.
+            stem = rec["name"].rsplit("-", 1)[0].strip().lower()
+            rec["subcities"] = sorted(
+                o["name"] for o in found.values()
+                if o["name"] != rec["name"] and o["name"].strip().lower().startswith(stem)
+            )
+    return sorted(found.values(), key=lambda r: r["name"])
+
+
+def list_cities():
+    """Just the names. Use city_records() when aggregating."""
+    return [r["name"] for r in city_records()]
 
 
 def city_is_serviced(city):
@@ -314,6 +347,70 @@ def now_showing(city, lat=None, lng=None):
 # --------------------------------------------------------------------------
 
 
+# ISO 639-1 for the languages the chain actually schedules.
+LANG_CODES = {
+    "english": "en", "hindi": "hi", "tamil": "ta", "telugu": "te",
+    "malayalam": "ml", "kannada": "kn", "marathi": "mr", "bengali": "bn",
+    "punjabi": "pa", "gujarati": "gu", "odia": "or", "assamese": "as",
+    "bhojpuri": "bho", "urdu": "ur", "japanese": "ja", "korean": "ko",
+    "spanish": "es", "french": "fr", "german": "de", "mandarin": "zh",
+    "chinese": "zh", "nepali": "ne", "konkani": "kok", "tulu": "tcy",
+}
+
+FORMAT_HINTS = ("IMAX", "4DX", "3D", "2D", "ATMOS", "DTSX", "DOLBY", "P[XL]", "BIGPIX", "LASER", "ICE")
+
+
+def lang_code(name):
+    """'Tamil' -> 'ta'. None when we genuinely do not know - never guessed."""
+    if not name:
+        return None
+    return LANG_CODES.get(str(name).strip().lower())
+
+
+def parse_title(raw):
+    """Split 'DC (TAMIL WITH ENGLISH SUBTITLE)' into its parts.
+
+    The parenthetical is NOT reliably a language - 'DOOKUDU (DARING AND
+    DASHING) (RE RELEASE)' has two, neither of which is one. So this only
+    reports what it can actually recognise, and the caller prefers the API's
+    own structured language field over anything found here.
+    """
+    text = str(raw or "")
+    out = {"raw": text, "title": text, "language": None,
+           "subtitle_language": None, "formats": []}
+
+    # Work through the trailing parentheticals, right to left.
+    body = text
+    groups = []
+    while body.endswith(")") and "(" in body:
+        start = body.rfind("(")
+        groups.append(body[start + 1:-1])
+        body = body[:start].strip()
+    out["title"] = body or text
+
+    for group in groups:
+        upper = group.upper()
+        for hint in FORMAT_HINTS:
+            if hint in upper and hint not in out["formats"]:
+                out["formats"].append(hint)
+
+        # "TAMIL WITH ENGLISH SUBTITLE" / "3D ENGLISH WITH ENGLI" (truncated)
+        parts = upper.split(" WITH ")
+        spoken = parts[0]
+        for word in spoken.replace("[", " ").replace("]", " ").split():
+            code = LANG_CODES.get(word.lower())
+            if code and not out["language"]:
+                out["language"] = code
+        if len(parts) > 1:
+            for word in parts[1].split():
+                # Truncation means 'ENGLI'/'SUBTITLE...' - match on prefix.
+                for name, code in LANG_CODES.items():
+                    if name.startswith(word.lower()) or word.lower().startswith(name[:5]):
+                        out["subtitle_language"] = out["subtitle_language"] or code
+                        break
+    return out
+
+
 def day_sessions(city, cinema_id, date, lat=None, lng=None):
     """Sessions at one cinema on one date. Returns (shows, error).
 
@@ -346,15 +443,52 @@ def day_sessions(city, cinema_id, date, lat=None, lng=None):
 
     shows = []
     for movie in payload["output"].get("cinemaMovieSessions") or []:
-        film = (movie.get("movieRe") or {}).get("filmName", "")
+        movie_re = movie.get("movieRe") or {}
+        film = movie_re.get("filmName", "")
+        parsed = parse_title(film)
         for exp in movie.get("experienceSessions") or []:
             for show in exp.get("shows") or []:
+                # THE TITLE WINS. The per-show `language` field is not
+                # trustworthy: in a Chennai sample, 27 shows titled
+                # "SPIDERMAN BRAND NEW DAY (TAMIL)" reported language
+                # "English" - same film, same cinemas, contradicting the title
+                # the box office actually displays. Trusting that field is how
+                # you send someone to a dub. The parenthetical is the schedule.
+                # The field is used only where the title carries no language,
+                # and any disagreement is recorded rather than smoothed over.
+                language = parsed["language"] or lang_code(show.get("language"))
+                field_code = lang_code(show.get("language"))
+                disputed = bool(
+                    parsed["language"] and field_code and parsed["language"] != field_code
+                )
+
+                # The `subtitle` boolean disagrees with the title in real data
+                # (ANBE DIANA says "WITH ENGLISH SUBTITLE" but sets it False),
+                # so an explicit title beats the flag.
+                subtitle_language = parsed["subtitle_language"]
+                if subtitle_language is None and show.get("subtitle"):
+                    subtitle_language = "en"
+
+                formats = list(parsed["formats"])
+                for extra in (show.get("movieFormat") or "").upper().split():
+                    if extra and extra not in formats:
+                        formats.append(extra)
+
                 shows.append(
                     {
                         "film": film,
+                        "title": movie_re.get("n") or parsed["title"],
+                        "canonical_film_id": movie_re.get("id"),
+                        "language": language,
+                        "language_source": "title" if parsed["language"] else (
+                            "api_field" if field_code else None
+                        ),
+                        "language_disputed": disputed,
+                        "language_name": show.get("language") or None,
+                        "subtitle_language": subtitle_language,
+                        "formats": formats,
                         "experience": exp.get("experienceKey", ""),
                         "format": show.get("movieFormat", ""),
-                        "language": show.get("language", ""),
                         "date": show.get("showDate"),
                         "time": show.get("showTime"),
                         "ts": show.get("showTimeStamp") or 0,
