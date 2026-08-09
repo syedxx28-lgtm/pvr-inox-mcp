@@ -17,7 +17,10 @@ is Cloudflare-gated against every plain request), are out of reach.
 
 import datetime
 import json
+import os
 import socket
+import threading
+import time
 import urllib.error
 import urllib.request
 
@@ -70,11 +73,47 @@ def _headers(city):
     }
 
 
+# Politeness budget. The upstream is Akamai-fronted and WILL block an IP that
+# hammers it - earned that the hard way. MIN_INTERVAL paces every call from this
+# process; a 403/429 trips a cooldown that fails fast instead of digging deeper.
+MIN_INTERVAL = float(os.environ.get("PVR_MIN_INTERVAL", "0.4"))
+BLOCK_COOLDOWN = float(os.environ.get("PVR_BLOCK_COOLDOWN", "900"))
+_last_call = [0.0]
+_blocked_until = [0.0]
+_throttle = threading.Lock()
+
+
+class Blocked(Exception):
+    """Upstream is refusing us. Back off; do not retry in a loop."""
+
+
+def _pace():
+    with _throttle:
+        now = time.monotonic()
+        if now < _blocked_until[0]:
+            raise Blocked(
+                "upstream returned 403/429; cooling off for %d more seconds"
+                % int(_blocked_until[0] - now)
+            )
+        wait = MIN_INTERVAL - (now - _last_call[0])
+        if wait > 0:
+            time.sleep(wait)
+        _last_call[0] = time.monotonic()
+
+
 def _post(path, body, city="Chennai", timeout=30):
+    _pace()
     req = urllib.request.Request(
         "%s/%s" % (API, path), json.dumps(body).encode(), _headers(city)
     )
-    return json.load(urllib.request.urlopen(req, timeout=timeout))
+    try:
+        return json.load(urllib.request.urlopen(req, timeout=timeout))
+    except urllib.error.HTTPError as exc:
+        if exc.code in (403, 429):
+            _blocked_until[0] = time.monotonic() + BLOCK_COOLDOWN
+            raise Blocked("upstream returned %d - backing off %ds"
+                          % (exc.code, int(BLOCK_COOLDOWN))) from exc
+        raise
 
 
 # --------------------------------------------------------------------------
@@ -162,23 +201,44 @@ def find_cinema(city, cinema_id):
     return None
 
 
-def booking_horizon(city, cinema_id, lat=None, lng=None, max_days=21):
-    """Last date currently on sale, found by probing. Returns (date, days_ahead).
+_HORIZON_CACHE = {}
 
-    The window is roughly 5 days but is not published, and it moves. Reading it
-    live beats hardcoding it.
+
+def booking_horizon(city, cinema_id, lat=None, lng=None, max_days=21):
+    """Last date currently on sale. Returns (date, days_ahead).
+
+    Binary search, not a linear walk: the window is a step function (open up to
+    a point, closed after), so ~5 calls answer what 21 used to. Cached per
+    cinema per day, because the answer barely moves and every call is a request
+    against an API that blocks heavy users.
     """
     today = datetime.date.today()
-    last = None
-    for offset in range(max_days):
-        day = today + datetime.timedelta(days=offset)
-        _, err = day_sessions(city, cinema_id, day.isoformat(), lat, lng)
-        if err == "closed":
-            break
-        if err:
-            continue
-        last = day
-    return (last.isoformat() if last else None), ((last - today).days if last else None)
+    key = (str(city).lower(), str(cinema_id), today.isoformat())
+    if key in _HORIZON_CACHE:
+        return _HORIZON_CACHE[key]
+
+    def open_on(offset):
+        day = (today + datetime.timedelta(days=offset)).isoformat()
+        _, err = day_sessions(city, cinema_id, day, lat, lng)
+        return err != "closed"
+
+    result = (None, None)
+    try:
+        if open_on(0):
+            lo, hi = 0, max_days  # lo is known-open, hi is assumed-closed
+            while hi - lo > 1:
+                mid = (lo + hi) // 2
+                if open_on(mid):
+                    lo = mid
+                else:
+                    hi = mid
+            last = today + datetime.timedelta(days=lo)
+            result = (last.isoformat(), lo)
+    except Blocked:
+        return (None, None)  # never let a horizon probe deepen a block
+
+    _HORIZON_CACHE[key] = result
+    return result
 
 
 def list_cinemas(city, lat=None, lng=None, query=""):
@@ -274,6 +334,8 @@ def day_sessions(city, cinema_id, date, lat=None, lng=None):
     }
     try:
         payload = _post("content/csessions", body, city)
+    except Blocked as exc:
+        return None, "blocked: %s" % exc
     except urllib.error.HTTPError as exc:
         return None, "http %s" % exc.code
     except Exception as exc:
@@ -426,6 +488,8 @@ def seat_report(token, zone_rows=None, zone_seats=None, want_map=False, party_si
     """
     try:
         payload = _post("ticketing/seatlayout", {"encrypted": token})
+    except Blocked as exc:
+        return None, "blocked: %s" % exc
     except Exception as exc:
         return None, "seatmap %s" % exc
 

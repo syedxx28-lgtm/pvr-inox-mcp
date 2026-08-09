@@ -105,6 +105,11 @@ def poll(watch, today, verbose=False):
 
         shows, err = fetch_day(watch, date_str)
 
+        if err and err.startswith("blocked"):
+            # Every further request digs the hole deeper. Abandon this cycle.
+            print("  UPSTREAM BLOCKED - %s" % err, file=sys.stderr)
+            raise core.Blocked(err)
+
         if err == "closed":
             if verbose:
                 print("  %s  closed" % date_str)
@@ -360,7 +365,11 @@ def stream(config, state, args, state_path):
             if args.watch and watch["name"] != args.watch:
                 continue
 
-            snapshot = poll(watch, today)
+            try:
+                snapshot = poll(watch, today)
+            except core.Blocked as exc:
+                print("  paused: %s" % exc, file=sys.stderr)
+                continue
             previous = state.get(watch["name"], {})
             if previous:
                 for ev in diff(watch, previous, snapshot):
