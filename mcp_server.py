@@ -231,7 +231,11 @@ def pvr_cities(format: str = "text") -> str:
 def pvr_cinemas(
     city: str, query: str = "", lat: str = "", lng: str = "", format: str = "text"
 ) -> str:
-    """Cinemas in a city, busiest first. `query` filters on the name.
+    """Cinemas in a city, nearest first when a distance can be measured.
+
+    Distance is computed from a stated origin - your lat/lng if given, else the
+    city centre. 11 of 116 cities publish no coordinates; for those the
+    distance reads "unknown" rather than a wrong number.
 
     Returns the cinema_id that every other tool needs. Pass lat/lng when you
     know where the user is - the list is distance-filtered.
@@ -240,12 +244,19 @@ def pvr_cinemas(
     if not rows:
         return "No cinemas found in %s%s." % (city, " matching %r" % query if query else "")
 
+    origin = rows[0].get("distance_from") if rows else None
     lines = ["%-6s %-46s %-11s %s" % ("ID", "CINEMA", "DISTANCE", "SHOWS"), "-" * 78]
     for r in rows:
         lines.append(
             "%-6s %-46s %-11s %s"
-            % (r["cinema_id"], r["name"][:46], r["distance"] or "-", r["shows"])
+            % (r["cinema_id"], r["name"][:46], r["distance"], r["shows"])
         )
+    if origin:
+        lines.append("\ndistance measured from: %s" %
+                     ("the lat/lng you passed" if origin == "caller" else "the city centre"))
+    else:
+        lines.append("\nDISTANCE UNAVAILABLE - this city publishes no coordinates, so no "
+                     "reference point exists. Pass lat/lng to get real distances.")
     return _out(rows, "\n".join(lines), format)
 
 

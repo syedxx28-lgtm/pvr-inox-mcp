@@ -142,6 +142,21 @@ def _load_city_coords():
     return _CITY_COORDS
 
 
+def haversine_km(lat1, lng1, lat2, lng2):
+    """Straight-line km. Computed here so distance never depends on what the
+    upstream assumed our origin was."""
+    import math
+    try:
+        lat1, lng1, lat2, lng2 = (float(x) for x in (lat1, lng1, lat2, lng2))
+    except (TypeError, ValueError):
+        return None
+    r = 6371.0
+    dlat, dlng = math.radians(lat2 - lat1), math.radians(lng2 - lng1)
+    a = (math.sin(dlat / 2) ** 2
+         + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlng / 2) ** 2)
+    return round(2 * r * math.asin(math.sqrt(a)), 1)
+
+
 def city_coords(city):
     """Coordinates for a city, so distances are measured from the right place.
 
@@ -149,9 +164,9 @@ def city_coords(city):
     default silently produced "1031 km away" for every Mumbai cinema.
     """
     try:
-        return _load_city_coords().get((city or "").strip().lower()) or DEFAULT_LATLNG
+        return _load_city_coords().get((city or "").strip().lower())
     except Exception:
-        return DEFAULT_LATLNG
+        return None
 
 
 def city_records():
@@ -275,10 +290,18 @@ def booking_horizon(city, cinema_id, lat=None, lng=None, max_days=21):
 
 
 def list_cinemas(city, lat=None, lng=None, query=""):
-    """Cinemas in a city, nearest first. `query` filters on the name."""
-    fallback = city_coords(city)
-    lat = lat or fallback[0]
-    lng = lng or fallback[1]
+    """Cinemas in a city. `query` filters on the name.
+
+    Distance is measured HERE from a stated origin, not taken from the
+    upstream echo. 11 of 116 cities (Leh, Gurugram, Noida, Thane...) carry no
+    coordinates at all, so a silent fallback reported PVR Leh as "2353.8 km
+    away" - the distance from Chennai. With no origin, no distance is claimed.
+    """
+    centre = city_coords(city)
+    origin = (lat, lng) if (lat and lng) else centre
+    origin_label = "caller" if (lat and lng) else ("city_centre" if centre else None)
+    lat = (origin or DEFAULT_LATLNG)[0]
+    lng = (origin or DEFAULT_LATLNG)[1]
     payload = _post(
         "content/cinemas",
         {"city": city, "lat": str(lat), "lng": str(lng), "text": ""},
@@ -296,7 +319,6 @@ def list_cinemas(city, lat=None, lng=None, query=""):
                     "address": node.get("address1", ""),
                     "lat": node.get("latitude"),
                     "lng": node.get("longitude"),
-                    "distance": node.get("distanceText", ""),
                     "shows": node.get("showCount", 0),
                 }
             for value in node.values():
@@ -307,6 +329,16 @@ def list_cinemas(city, lat=None, lng=None, query=""):
 
     walk(payload.get("output") or {})
     rows = list(found.values())
+    for row in rows:
+        km = (
+            haversine_km(origin[0], origin[1], row["lat"], row["lng"])
+            if origin else None
+        )
+        row["distance_km"] = km
+        row["distance_from"] = origin_label
+        row["distance"] = ("%.1f km" % km) if km is not None else "unknown"
+    if origin:
+        rows.sort(key=lambda r: (r["distance_km"] is None, r["distance_km"] or 0))
     if query:
         needle = query.lower()
         rows = [r for r in rows if needle in r["name"].lower()]
