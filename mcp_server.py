@@ -59,6 +59,12 @@ Things that matter when answering:
   Filter with language="en". Do NOT judge a film's languages from the block
   title or from the release list in pvr_now_showing; both mislead.
 
+- STATE is a derived enum, never the upstream label: ON_SALE, LIMITED (<15%
+  free), SOLD_OUT, CLOSED (booking shut, or the show is under way), COMPLETED,
+  NOT_ON_SALE. "Lapsed" never appears - it is a SALE state, not a time state,
+  and shows up on screenings hours in the future. Only ON_SALE and LIMITED are
+  bookable. A trailing "?" means inventory was not counted.
+
 - ERRORS START WITH "ERROR <CODE>:" and are not availability facts.
   CITY_NOT_SERVICED, CINEMA_NOT_FOUND, DATE_IN_PAST, BEYOND_BOOKING_WINDOW,
   SHOW_NOT_BOOKABLE, SHOW_NOT_FOUND, UPSTREAM_ERROR. A past date is DATE_IN_PAST,
@@ -335,17 +341,17 @@ def pvr_showtimes(
 
     # R-P0-6: unbookable shows are excluded by default, with a count so the
     # caller can say "3 shows, all sold out" without another call.
+    for s in shows:
+        s["state"], s["state_verified"] = core.show_status(s)
+
     excluded = {}
     if bookable_only:
         keep = []
         for s in shows:
-            state = (s["status"] or "").lower()
-            if "housefull" in state or "sold" in state:
-                excluded["sold_out"] = excluded.get("sold_out", 0) + 1
-            elif state == "lapsed" or not s["token"]:
-                excluded["closed"] = excluded.get("closed", 0) + 1
-            else:
+            if s["state"] in core.BOOKABLE:
                 keep.append(s)
+            else:
+                excluded[s["state"]] = excluded.get(s["state"], 0) + 1
         shows = keep
 
     if not shows:
@@ -362,7 +368,7 @@ def pvr_showtimes(
     # multilingual market cares most about.
     width = max([len(s["film"] or "") for s in shows] + [30])
     lines = [
-        "%-*s %-9s %-5s %-8s %-10s %s" % (width, "FILM", "TIME", "LANG", "FORMAT", "SCREEN", "STATUS"),
+        "%-*s %-9s %-5s %-8s %-10s %s" % (width, "FILM", "TIME", "LANG", "FORMAT", "SCREEN", "STATE"),
         "-" * (width + 42),
     ]
     for s in shows:
@@ -375,7 +381,7 @@ def pvr_showtimes(
                 s.get("language") or "?",
                 s["experience"] or s["format"] or "-",
                 s["screen"][:10],
-                s["status"],
+                s["state"] + ("" if s["state_verified"] else "?"),
             )
         )
     if excluded:
@@ -385,7 +391,13 @@ def pvr_showtimes(
         "over the release languages in pvr_now_showing, which list what the film "
         "was released in, not what is playing here."
     )
-    lines.append("Status is show-level and hides seat quality - use pvr_seats.")
+    lines.append(
+        "STATE is derived, not the upstream label: time decides COMPLETED/CLOSED, "
+        "inventory decides ON_SALE/LIMITED/SOLD_OUT. A trailing '?' means seats "
+        "were not counted - use pvr_seats to confirm before promising a booking. "
+        "The upstream label is unreliable both ways: 'Lapsed' appears on shows "
+        "hours in the future, and a 'Housefull' show had 1 free seat."
+    )
     return _out(shows, "\n".join(lines), format)
 
 
@@ -484,14 +496,10 @@ def pvr_seats(
         results.append(report)
 
         need = max(1, party_size)
+        state, _ = core.show_status(show, report)
         lines.append(
-            "%-9s %-8s %-22s %s"
-            % (
-                show["time"],
-                show["experience"] or "-",
-                show["status"][:22],
-                core.describe_seats(report),
-            )
+            "%-9s %-8s %-10s %s"
+            % (show["time"], show["experience"] or "-", state, core.describe_seats(report))
         )
 
         # R-P0-4a: the zone is a heuristic. When it cannot seat the party, say

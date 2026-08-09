@@ -550,6 +550,7 @@ def day_sessions(city, cinema_id, date, lat=None, lng=None):
                         "date": show.get("showDate"),
                         "time": show.get("showTime"),
                         "ts": show.get("showTimeStamp") or 0,
+                        "ends_ts": show.get("endTimeStamp") or 0,
                         "screen": show.get("screenName", ""),
                         "status": show.get("statusTxt", ""),
                         "token": show.get("encrypted", ""),
@@ -789,6 +790,56 @@ def seat_report(token, zone_rows=None, zone_seats=None, want_map=False, party_si
         # Front row first, matching how the cinema's own layout is drawn.
         report["map"] = ["    " + "SCREEN".center(40)] + picture
     return report, None
+
+
+# R-P0-3. Derived from measurement, not from the upstream label.
+#
+# Sampling 160 shows showed the label cannot be trusted in either direction:
+# "Lapsed" appears on shows up to 5.4h in the FUTURE, while "Available" and
+# "Filling Up Fast" appear on shows that started over an hour ago. A future
+# "Housefull" show had 1 free seat; a "Filling Up Fast" show had 9 of 508.
+# So: time decides COMPLETED/CLOSED, inventory decides the rest, and the label
+# is only consulted for whether booking is closed at all.
+LIMITED_FRACTION = 0.15
+
+STATUS_MEANING = {
+    "ON_SALE": "Open, seats available",
+    "LIMITED": "Open, under 15% of seats free",
+    "SOLD_OUT": "Open, zero seats free",
+    "NOT_ON_SALE": "Scheduled, booking not yet opened",
+    "CLOSED": "Booking shut - cutoff passed, or withdrawn from sale",
+    "COMPLETED": "Screening has finished",
+}
+BOOKABLE = {"ON_SALE", "LIMITED"}
+
+
+def show_status(show, report=None, now=None):
+    """(status, verified) for one show. `report` is a seat_report when available.
+
+    verified=False means the state was inferred without looking at inventory -
+    the caller must not present it as definitely bookable.
+    """
+    now = now or datetime.datetime.now()
+    stamp = now.timestamp() * 1000
+
+    if show.get("ends_ts") and stamp > show["ends_ts"]:
+        return "COMPLETED", True
+    if not show.get("token") or (show.get("status") or "").lower() == "lapsed":
+        # Not sellable. True whether the show is past OR hours away.
+        return "CLOSED", True
+    if show.get("ts") and stamp > show["ts"]:
+        return "CLOSED", True  # under way; cutoff has passed
+
+    if report and report.get("total"):
+        free, total = report["free"], report["total"]
+        if free == 0:
+            return "SOLD_OUT", True
+        if free / total < LIMITED_FRACTION:
+            return "LIMITED", True
+        return "ON_SALE", True
+
+    # Future and sellable, but nothing has counted the seats yet.
+    return "ON_SALE", False
 
 
 def describe_seats(report):
