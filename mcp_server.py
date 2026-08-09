@@ -10,6 +10,7 @@ Run:  python3 mcp_server.py
 """
 
 import base64
+import datetime
 import json
 import os
 import subprocess
@@ -41,8 +42,24 @@ Things that matter when answering:
 - The "zone" is the good seats: the rows 60-85% of the way back, and the
   aisle-delimited centre block of each. It is derived from each auditorium's
   own geometry, so it works anywhere - row letters mean different things in
-  different houses. Override with zone_rows / zone_seats when the user has a
-  specific preference.
+  different houses.
+
+- "NO GOOD SEATS" IS NOT "NO SEATS". The zone is a heuristic and it is often
+  wrong in small or premium halls. When a show reports no good seats, pvr_seats
+  now tells you how many are free outside the zone and which rows have runs big
+  enough for the party, with a ready-made zone_rows to re-call with. Do that
+  before telling anyone a show is unusable. Always pass party_size.
+
+- LANGUAGE: pvr_now_showing lists RELEASE languages, which routinely include
+  languages with zero showtimes in that city - a film listed "Tamil, English"
+  can be 100% Tamil on the schedule. The authority is the title suffix in
+  pvr_showtimes, e.g. "(TAMIL)", "(3D ENGLISH WITH ENGLISH SUBTITLE...)".
+  Never tell a user an English show exists on the strength of the release list.
+
+- ERRORS START WITH "ERROR <CODE>:" and are not availability facts.
+  CITY_NOT_SERVICED, CINEMA_NOT_FOUND, DATE_IN_PAST, BEYOND_BOOKING_WINDOW,
+  SHOW_NOT_BOOKABLE, SHOW_NOT_FOUND, UPSTREAM_ERROR. A past date is DATE_IN_PAST,
+  never "not on sale yet" - do not tell anyone to wait for a date that has gone.
 
 - "closed" means the date is NOT YET ON SALE, not that it is sold out. The
   chain books roughly 5 days ahead on a rolling window, so a date beyond that
@@ -136,6 +153,44 @@ _LOOKUP = ToolAnnotations(
 )
 
 
+def _err(code, message, **extra):
+    """Errors are structurally distinguishable from data.
+
+    The connector used to answer an unknown cinema id, and a date a week in the
+    past, with the SAME cheerful "NOT ON SALE yet" string - a confident,
+    plausible, wrong assertion about an entity that may not even exist. A
+    caller must never have to parse prose to tell an error from a fact.
+    """
+    line = "ERROR %s: %s" % (code, message)
+    if extra:
+        line += "\n" + json.dumps({"error": code, **extra}, indent=1)
+    return line
+
+
+def _validate(city, cinema_id=None, date=None):
+    """Returns an error string, or None when the inputs are real."""
+    serviced = core.city_is_serviced(city)
+    if serviced is False:
+        return _err("CITY_NOT_SERVICED",
+                    "%r is not a city where PVR/INOX sells tickets. Use pvr_cities." % city)
+
+    if cinema_id is not None and not core.find_cinema(city, cinema_id):
+        return _err("CINEMA_NOT_FOUND",
+                    "No cinema %r in %s. Use pvr_cinemas to get valid ids." % (cinema_id, city))
+
+    if date:
+        try:
+            when = datetime.date.fromisoformat(date)
+        except ValueError:
+            return _err("BAD_DATE", "%r is not an ISO date (YYYY-MM-DD)." % date)
+        today = datetime.date.today()
+        if when < today:
+            return _err("DATE_IN_PAST",
+                        "%s has already passed (today is %s). It will not go on sale."
+                        % (date, today.isoformat()), date=date, today=today.isoformat())
+    return None
+
+
 def _out(payload, text, fmt):
     if (fmt or "text").strip().lower() == "json":
         return json.dumps(payload, indent=2, default=str)
@@ -180,16 +235,18 @@ def pvr_now_showing(
     if not films:
         return "Nothing showing in %s." % city
 
+    width = max([len(f["name"] or "") for f in films] + [24])
     lines = [
-        "%-34s %-7s %-7s %-20s %-6s %s"
-        % ("FILM", "CERT", "LENGTH", "LANGUAGES", "SHOWS", "FORMATS"),
-        "-" * 100,
+        "%-*s %-7s %-7s %-20s %-6s %s"
+        % (width, "FILM", "CERT", "LENGTH", "RELEASE LANGS", "SHOWS", "FORMATS"),
+        "-" * (width + 52),
     ]
     for f in films:
         lines.append(
-            "%-34s %-7s %-7s %-20s %-6d %s"
+            "%-*s %-7s %-7s %-20s %-6d %s"
             % (
-                (f["name"] or "")[:34],
+                width,
+                f["name"] or "",
                 f["certificate"],
                 f["length"],
                 ", ".join(f["languages"])[:20],
@@ -197,6 +254,12 @@ def pvr_now_showing(
                 ", ".join(f["formats"]),
             )
         )
+    lines.append(
+        "\nRELEASE LANGS is what the film was released in, NOT what is scheduled here. "
+        "A film listed as English may have zero English showtimes in this city. "
+        "Always confirm with pvr_showtimes, where the title suffix carries the "
+        "actual schedule language."
+    )
     return _out(films, "\n".join(lines), format)
 
 
@@ -219,38 +282,57 @@ def pvr_showtimes(
     If the date is not on sale yet this says so. That is different from being
     sold out.
     """
+    bad = _validate(city, cinema_id, date)
+    if bad:
+        return bad
+
     shows, err = core.day_sessions(city, cinema_id, date, lat or None, lng or None)
     if err == "closed":
-        return "%s is NOT ON SALE yet at cinema %s. The chain books about 5 days ahead, so it should open closer to the date." % (
-            date,
-            cinema_id,
+        last, days = core.booking_horizon(city, cinema_id, lat or None, lng or None)
+        return _err(
+            "BEYOND_BOOKING_WINDOW",
+            "%s is not on sale yet at cinema %s." % (date, cinema_id),
+            on_sale_through=last,
+            booking_window_days=days,
+            note="Bookings open on a rolling window; this date should open nearer the time.",
         )
     if err:
-        return "Could not read showtimes: %s" % err
+        return _err("UPSTREAM_ERROR", "Could not read showtimes: %s" % err)
 
     if film:
         shows = [s for s in shows if film.upper() in (s["film"] or "").upper()]
     if experience:
         shows = [s for s in shows if s["experience"] == experience]
     if not shows:
-        return "No matching shows at cinema %s on %s." % (cinema_id, date)
+        return "No matching shows at cinema %s on %s (the date IS on sale)." % (cinema_id, date)
 
+    # Titles are NOT truncated: the language and subtitle information is
+    # embedded in the parenthetical suffix ("(3D ENGLISH WITH ENGLISH
+    # SUBTITLE...")), so clipping the column silently destroys the one field a
+    # multilingual market cares most about.
+    width = max([len(s["film"] or "") for s in shows] + [30])
     lines = [
-        "%-42s %-9s %-8s %-10s %s" % ("FILM", "TIME", "FORMAT", "SCREEN", "STATUS"),
-        "-" * 92,
+        "%-*s %-9s %-8s %-10s %s" % (width, "FILM", "TIME", "FORMAT", "SCREEN", "STATUS"),
+        "-" * (width + 42),
     ]
     for s in shows:
         lines.append(
-            "%-42s %-9s %-8s %-10s %s"
+            "%-*s %-9s %-8s %-10s %s"
             % (
-                (s["film"] or "")[:42],
+                width,
+                s["film"] or "",
                 s["time"],
                 s["experience"] or s["format"] or "-",
                 s["screen"][:10],
                 s["status"],
             )
         )
-    lines.append("\nStatus is show-level and hides seat quality - use pvr_seats.")
+    lines.append(
+        "\nLanguage is in the title suffix and is the SCHEDULE language - trust it "
+        "over the release languages in pvr_now_showing, which list what the film "
+        "was released in, not what is playing here."
+    )
+    lines.append("Status is show-level and hides seat quality - use pvr_seats.")
     return _out(shows, "\n".join(lines), format)
 
 
@@ -262,6 +344,7 @@ def pvr_seats(
     film: str = "",
     time: str = "",
     experience: str = "",
+    party_size: int = 1,
     zone_rows: str = "",
     zone_seats: str = "",
     seat_map: bool = False,
@@ -275,16 +358,38 @@ def pvr_seats(
     matching show it reports free seats overall, free seats in the zone, and
     the largest run of adjacent free seats in the zone.
 
+    party_size: how many seats you need TOGETHER. Availability is judged against
+      this - "1 seat free" is not a result for a party of 2.
+
+    THE ZONE IS A HEURISTIC, AND WIDENING IT IS THE FIX. The default zone is the
+    back-centre block. When it cannot seat the party, the response reports how
+    many seats are free OUTSIDE it and names the rows, e.g.
+
+        no good seats (0 free in zone, 97% booked overall)
+        zone covered rows F,E,D,C (0 free); 15 more free seats OUTSIDE it
+        seats 2+ together elsewhere: N (2 together at N3-N4), O (9 at O21-O29)
+        -> widen with zone_rows="F,E,D,C,N,O"
+
+    Re-call with that zone_rows to get those blocks scored. Never report "no
+    seats" to a user on the strength of the default zone alone.
+
     zone_rows: comma-separated row letters to override the auto zone ("F,E,D,C").
     zone_seats: "11-21" to override the seat-number range.
     seat_map: include an ASCII map. O = free in zone, x = taken in zone,
               o = free outside it, . = taken outside it.
     """
+    bad = _validate(city, cinema_id, date)
+    if bad:
+        return bad
+
     shows, err = core.day_sessions(city, cinema_id, date, lat or None, lng or None)
     if err == "closed":
-        return "%s is NOT ON SALE yet at cinema %s." % (date, cinema_id)
+        last, days = core.booking_horizon(city, cinema_id, lat or None, lng or None)
+        return _err("BEYOND_BOOKING_WINDOW",
+                    "%s is not on sale yet at cinema %s." % (date, cinema_id),
+                    on_sale_through=last, booking_window_days=days)
     if err:
-        return "Could not read showtimes: %s" % err
+        return _err("UPSTREAM_ERROR", "Could not read showtimes: %s" % err)
 
     if film:
         shows = [s for s in shows if film.upper() in (s["film"] or "").upper()]
@@ -292,9 +397,16 @@ def pvr_seats(
         shows = [s for s in shows if s["experience"] == experience]
     if time:
         shows = [s for s in shows if time.lower() in s["time"].lower()]
+    closed = [s for s in shows if s["status"].lower() == "lapsed" or not s["token"]]
     shows = [s for s in shows if s["status"].lower() != "lapsed" and s["token"]]
     if not shows:
-        return "No bookable shows match at cinema %s on %s." % (cinema_id, date)
+        if closed:
+            return _err("SHOW_NOT_BOOKABLE",
+                        "%d matching show(s) exist at cinema %s on %s but none can be booked "
+                        "(already started or closed)." % (len(closed), cinema_id, date),
+                        times=[s["time"] for s in closed])
+        return _err("SHOW_NOT_FOUND",
+                    "No show matches those filters at cinema %s on %s." % (cinema_id, date))
 
     rows = [r.strip().upper() for r in zone_rows.split(",") if r.strip()] or None
     seats = None
@@ -307,7 +419,9 @@ def pvr_seats(
 
     results, lines = [], []
     for show in shows[:12]:
-        report, seat_err = core.seat_report(show["token"], rows, seats, want_map=seat_map)
+        report, seat_err = core.seat_report(
+            show["token"], rows, seats, want_map=seat_map, party_size=max(1, party_size)
+        )
         if seat_err:
             lines.append("%-9s %s" % (show["time"], seat_err))
             continue
@@ -316,6 +430,7 @@ def pvr_seats(
         report["status"] = show["status"]
         results.append(report)
 
+        need = max(1, party_size)
         lines.append(
             "%-9s %-8s %-22s %s"
             % (
@@ -325,6 +440,34 @@ def pvr_seats(
                 core.describe_seats(report),
             )
         )
+
+        # R-P0-4a: the zone is a heuristic. When it cannot seat the party, say
+        # what the zone covered, what exists outside it, and how to widen it -
+        # rather than reporting "no good seats" while 15 sit one row away.
+        if not report["meets_party_size"]:
+            lines.append(
+                "   zone covered rows %s (%d free); %d more free seats OUTSIDE it"
+                % (
+                    ",".join(report["zone_rows"]) or "-",
+                    report["zone_free"],
+                    report["free_outside_zone"],
+                )
+            )
+            alts = [a for a in report["alternatives"] if a["best_run"] >= need]
+            if alts:
+                shown = ", ".join(
+                    "%s (%d together at %s)" % (a["row"], a["best_run"], a["best_where"])
+                    for a in alts[:3]
+                )
+                lines.append("   seats %d+ together elsewhere: %s" % (need, shown))
+                lines.append(
+                    '   -> widen with zone_rows="%s"'
+                    % ",".join(
+                        dict.fromkeys(report["zone_rows"] + [a["row"] for a in alts[:3]])
+                    )
+                )
+            else:
+                lines.append("   no %d adjacent seats anywhere in this hall" % need)
         if seat_map:
             lines.append("   zone rows: %s" % ", ".join(report["zone_rows"]))
             lines += ["   " + line for line in report.get("map", [])]

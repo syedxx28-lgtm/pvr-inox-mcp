@@ -15,6 +15,7 @@ Note this covers the PVR/INOX chain only. Other chains, and BookMyShow (which
 is Cloudflare-gated against every plain request), are out of reach.
 """
 
+import datetime
 import json
 import socket
 import urllib.error
@@ -131,6 +132,53 @@ def list_cities():
 
     walk(payload.get("output") or payload)
     return sorted(found)
+
+
+def city_is_serviced(city):
+    """True if the chain sells tickets in this city at all.
+
+    Distinguishes "no such city" from "city with nothing on today" - the old
+    output collapsed both into 'Nothing showing'.
+    """
+    try:
+        return (city or "").strip().lower() in {c.lower() for c in list_cities()}
+    except Exception:
+        return None  # unknown; caller should not assert either way
+
+
+def find_cinema(city, cinema_id):
+    """The cinema record, or None if this id is not in that city.
+
+    Without this the API answers a made-up cinema id with a cheerful
+    availability string, which is a fabricated fact rather than an error.
+    """
+    try:
+        wanted = str(cinema_id)
+        for row in list_cinemas(city):
+            if str(row["cinema_id"]) == wanted:
+                return row
+    except Exception:
+        return None
+    return None
+
+
+def booking_horizon(city, cinema_id, lat=None, lng=None, max_days=21):
+    """Last date currently on sale, found by probing. Returns (date, days_ahead).
+
+    The window is roughly 5 days but is not published, and it moves. Reading it
+    live beats hardcoding it.
+    """
+    today = datetime.date.today()
+    last = None
+    for offset in range(max_days):
+        day = today + datetime.timedelta(days=offset)
+        _, err = day_sessions(city, cinema_id, day.isoformat(), lat, lng)
+        if err == "closed":
+            break
+        if err:
+            continue
+        last = day
+    return (last.isoformat() if last else None), ((last - today).days if last else None)
 
 
 def list_cinemas(city, lat=None, lng=None, query=""):
@@ -351,7 +399,27 @@ def resolve_zone(seat_rows, zone_rows=None, zone_seats=None):
     return zone
 
 
-def seat_report(token, zone_rows=None, zone_seats=None, want_map=False):
+def _row_runs(row, free_only=True):
+    """Free contiguous runs in a row, as (first, last, length). Gaps break runs."""
+    runs, current = [], []
+    for seat in row.get("s") or []:
+        label = seat.get("sn")
+        if not label:
+            if current:
+                runs.append(current)
+                current = []
+            continue
+        if seat.get("s") == 1 or not free_only:
+            current.append(label)
+        elif current:
+            runs.append(current)
+            current = []
+    if current:
+        runs.append(current)
+    return [(r[0], r[-1], len(r)) for r in runs]
+
+
+def seat_report(token, zone_rows=None, zone_seats=None, want_map=False, party_size=1):
     """Seat availability for one session. Returns (report, error).
 
     s == 1 is free, s == 2 is taken - verified against the rendered seat map.
@@ -415,6 +483,35 @@ def seat_report(token, zone_rows=None, zone_seats=None, want_map=False):
 
         picture.append("%-3s %s" % (name, glyphs))
 
+    # Every row's free runs, so the caller can be told what exists OUTSIDE the
+    # zone. The zone is a heuristic; when it comes up short the answer is
+    # usually sitting one row away, and the old output never said so.
+    elsewhere = []
+    for row in seat_rows:
+        name = row.get("n")
+        runs = [r for r in _row_runs(row) if r[2] >= max(1, party_size)]
+        if not runs:
+            continue
+        in_zone = bool(zone.get(name))
+        best = max(runs, key=lambda r: r[2])
+        elsewhere.append(
+            {
+                "row": name,
+                "in_zone": in_zone,
+                "free": sum(r[2] for r in runs),
+                "best_run": best[2],
+                "best_where": best[0] if best[2] == 1 else "%s-%s" % (best[0], best[1]),
+                # Rows are listed front-first; further back is generally better,
+                # so rank alternatives by depth without pretending it is precise.
+                "depth": seat_rows.index(row) / max(1, len(seat_rows) - 1),
+            }
+        )
+
+    alternatives = sorted(
+        [r for r in elsewhere if not r["in_zone"]],
+        key=lambda r: (-min(r["depth"], 0.85), -r["best_run"]),
+    )
+
     report = {
         "cinema": output.get("cinemaName", ""),
         "when": output.get("showDateTime", ""),
@@ -427,6 +524,10 @@ def seat_report(token, zone_rows=None, zone_seats=None, want_map=False):
         "best_where": best_where,
         "seats": zone_names[:60],
         "zone_rows": [r for r in zone if zone[r]],
+        "party_size": party_size,
+        "meets_party_size": best_run >= max(1, party_size),
+        "free_outside_zone": free - zone_free,
+        "alternatives": alternatives[:6],
     }
     if want_map:
         # Front row first, matching how the cinema's own layout is drawn.
