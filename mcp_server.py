@@ -921,8 +921,20 @@ def pvr_publish_watches(message: str = "") -> str:
     runs. Only watches.json is committed; nothing else in the tree is touched.
     """
     status = _git("status", "--porcelain", "watches.json").stdout.strip()
-    if not status:
-        return "watches.json has no uncommitted changes - already live."
+    # "Clean working tree" is not the same as "live": a previous publish may
+    # have committed and then failed to push, which read as already-live.
+    _git("fetch", "-q", "origin", "main")
+    ahead = _git("rev-list", "--count", "origin/main..HEAD").stdout.strip() or "0"
+    if not status and ahead == "0":
+        return "watches.json is committed and pushed - already live."
+    if not status and ahead != "0":
+        push = _git("push", "origin", "HEAD")
+        if push.returncode:
+            pull = _git("pull", "--rebase", "--autostash", "origin", "main")
+            push = _git("push", "origin", "HEAD")
+        return ("Pushed %s commit(s) that were committed but never pushed. Live on the "
+                "next run." % ahead) if not push.returncode else (
+                "Could not push:\n%s" % push.stderr.strip())
 
     _git("add", "watches.json")
     commit = _git("commit", "-m", message or "watches: update via MCP")
@@ -931,7 +943,16 @@ def pvr_publish_watches(message: str = "") -> str:
 
     push = _git("push", "origin", "HEAD")
     if push.returncode:
-        return "Committed locally but push failed:\n%s\nPush by hand to go live." % push.stderr.strip()
+        # The cron commits state.json on every run, so the remote moves under
+        # us constantly. Rebase onto it and retry once before giving up.
+        pull = _git("pull", "--rebase", "--autostash", "origin", "main")
+        if pull.returncode:
+            return ("Committed locally, and rebasing onto the remote failed:\n%s\n"
+                    "Resolve by hand." % pull.stderr.strip())
+        push = _git("push", "origin", "HEAD")
+        if push.returncode:
+            return ("Committed locally but push still failed after rebase:\n%s"
+                    % push.stderr.strip())
     return "Published. The cron picks up the new config on its next run (within ~5-15 min)."
 
 
