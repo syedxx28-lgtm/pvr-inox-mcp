@@ -91,9 +91,16 @@ def show_key(show):
 
 
 def poll(watch, today, verbose=False):
-    """Poll the forward window. Returns {date: {show_key: show}} for open dates."""
+    """Poll the forward window. Returns {date: {show_key: show}} for open dates.
+
+    Sets poll.answered to the number of dates the upstream actually answered
+    for. A "closed" date counts: the API replied, it just has nothing on sale.
+    Only network failures and blocks count as no answer - that distinction is
+    what the heartbeat needs.
+    """
     fetch_day, _ = PROVIDERS[watch.get("provider", "pvr")]
     snapshot = {}
+    answered = 0
 
     want_days = watch.get("weekdays")
 
@@ -114,6 +121,7 @@ def poll(watch, today, verbose=False):
             raise core.Blocked(err)
 
         if err == "closed":
+            answered += 1
             if verbose:
                 print("  %s  closed" % date_str)
             continue
@@ -124,6 +132,7 @@ def poll(watch, today, verbose=False):
             snapshot[date_str] = None
             continue
 
+        answered += 1
         hits = {show_key(s): s for s in shows if matches(s, watch)}
 
         if watch.get("seat_detail"):
@@ -171,7 +180,57 @@ def poll(watch, today, verbose=False):
         if hits:
             snapshot[date_str] = hits
 
+    poll.answered = answered
     return snapshot
+
+
+HEARTBEAT_KEY = "__heartbeat__"
+HEARTBEAT_HOURS = float(os.environ.get("PVR_HEARTBEAT_HOURS", "6"))
+
+
+def check_heartbeat(state, answered_total, dry_run=False):
+    """Alert when the watch has gone blind.
+
+    A blocked or broken watcher fails silently and looks exactly like "nothing
+    has opened yet" - which is how three days of green Actions runs detected
+    nothing. Silence is not evidence, so absence of a successful poll is
+    itself reported.
+    """
+    beat = state.get(HEARTBEAT_KEY) or {}
+    now = core.now_ist()
+    stamp = now.isoformat(timespec="seconds")
+
+    if answered_total:
+        state[HEARTBEAT_KEY] = {"last_success": stamp, "last_alert": beat.get("last_alert")}
+        return False
+
+    last = beat.get("last_success")
+    if not last:
+        state[HEARTBEAT_KEY] = {"last_success": stamp, "last_alert": beat.get("last_alert")}
+        return False
+
+    quiet_h = (now - datetime.datetime.fromisoformat(last)).total_seconds() / 3600.0
+    if quiet_h < HEARTBEAT_HOURS:
+        return False
+
+    # Do not repeat more often than the threshold itself.
+    alerted = beat.get("last_alert")
+    if alerted:
+        since = (now - datetime.datetime.fromisoformat(alerted)).total_seconds() / 3600.0
+        if since < HEARTBEAT_HOURS:
+            return False
+
+    title = "\u26a0\ufe0f Watch is blind"
+    body = ("No successful poll for %.1f hours (last: %s).\n"
+            "The watcher is running but cannot reach the cinema API, so it "
+            "would NOT see a booking window open." % (quiet_h, last[:16].replace("T", " ")))
+    if dry_run:
+        print("%s\n%s" % (title, body))
+    else:
+        deliver(title, body, "", 5)
+    beat["last_alert"] = stamp
+    state[HEARTBEAT_KEY] = beat
+    return True
 
 
 # --------------------------------------------------------------------------
@@ -438,6 +497,7 @@ def main():
     today = core.today_ist()
     fired = 0
     blocked = 0
+    answered_total = 0
 
     for watch in config["watches"]:
         if not watch.get("enabled", True):
@@ -455,12 +515,16 @@ def main():
             print("  skipped: %s" % exc, file=sys.stderr)
             blocked += 1
             continue
+        answered_total += getattr(poll, "answered", 0)
         previous = state.get(watch["name"], {})
 
         # First ever run: record the baseline silently, or every open date
         # would fire as a discovery.
         if not previous:
-            print("  baseline recorded (%d open date(s))" % len(snapshot))
+            # Count only dates that actually answered - an errored date is not
+            # an open one, and saying so overstates what was recorded.
+            print("  baseline recorded (%d open date(s))"
+                  % len([v for v in snapshot.values() if v]))
         else:
             events = diff(watch, previous, snapshot)
             if events:
@@ -475,7 +539,8 @@ def main():
                     print("  NOT DELIVERED - state held back", file=sys.stderr)
                     continue
             else:
-                print("  no change (%d open date(s))" % len(snapshot))
+                print("  no change (%d open date(s))"
+                      % len([v for v in snapshot.values() if v]))
 
         # Dates that errored this run keep their previous value, so a flaky
         # poll never manufactures a new_date on the following run.
@@ -487,6 +552,9 @@ def main():
         cutoff = today.isoformat()
         merged = {d: v for d, v in merged.items() if d >= cutoff}
         state[watch["name"]] = merged
+
+    if check_heartbeat(state, answered_total, args.dry_run):
+        print("  heartbeat ALERT sent - watch has gone blind", file=sys.stderr)
 
     if not args.dry_run:
         with open(state_path, "w") as fh:
