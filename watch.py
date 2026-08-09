@@ -437,6 +437,7 @@ def main():
 
     today = core.today_ist()
     fired = 0
+    blocked = 0
 
     for watch in config["watches"]:
         if not watch.get("enabled", True):
@@ -445,7 +446,15 @@ def main():
             continue
 
         print("%s" % watch["name"])
-        snapshot = poll(watch, today, verbose=args.show_all)
+        try:
+            snapshot = poll(watch, today, verbose=args.show_all)
+        except core.Blocked as exc:
+            # Upstream is refusing us. Skipping a cycle is the correct outcome -
+            # crashing the job turns a transient block into a red workflow and
+            # loses the run's state write.
+            print("  skipped: %s" % exc, file=sys.stderr)
+            blocked += 1
+            continue
         previous = state.get(watch["name"], {})
 
         # First ever run: record the baseline silently, or every open date
@@ -483,7 +492,9 @@ def main():
         with open(state_path, "w") as fh:
             json.dump(state, fh, indent=1, sort_keys=True)
 
-    return 0 if fired == 0 else 0
+    if blocked:
+        print("%d watch(es) skipped - upstream blocked this runner" % blocked)
+    return 0
 
 
 if __name__ == "__main__":
