@@ -50,6 +50,20 @@ socket.getaddrinfo = _ipv4_first
 
 API = "https://api3.pvrcinemas.com/api/v1/booking"
 
+# This is an India-only chain, so "today" means today in India - not on the
+# machine. Cloud Run and GitHub Actions both run UTC, where IST midnight to
+# 05:30 still reads as yesterday: the solver defaulted to a date whose shows
+# had all finished, and the cron watcher polled the wrong day every night.
+IST = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
+
+
+def now_ist():
+    return datetime.datetime.now(IST)
+
+
+def today_ist():
+    return now_ist().date()
+
 # Last-resort fallback only. Coordinates matter: the API measures distance from
 # whatever you send and filters cinema lists by it, so sending one city's
 # coordinates while asking about another gives nonsense distances and can drop
@@ -260,7 +274,7 @@ def booking_horizon(city, cinema_id, lat=None, lng=None, max_days=21):
     cinema per day, because the answer barely moves and every call is a request
     against an API that blocks heavy users.
     """
-    today = datetime.date.today()
+    today = today_ist()
     key = (str(city).lower(), str(cinema_id), today.isoformat())
     if key in _HORIZON_CACHE:
         return _HORIZON_CACHE[key]
@@ -457,7 +471,7 @@ def film_variants(city, lat=None, lng=None):
 
     One cached call per city per day.
     """
-    key = (str(city).lower(), datetime.date.today().isoformat())
+    key = (str(city).lower(), today_ist().isoformat())
     if key in _VARIANTS:
         return _VARIANTS[key]
 
@@ -730,7 +744,7 @@ def find_shows(city, lat=None, lng=None, radius_km=6.0, film=None, language=None
 
     meta["cinemas_skipped"] = []
 
-    start = datetime.date.fromisoformat(date) if date else datetime.date.today()
+    start = datetime.date.fromisoformat(date) if date else today_ist()
     end = datetime.date.fromisoformat(date_to) if date_to else start
     days = [(start + datetime.timedelta(days=i)).isoformat()
             for i in range((end - start).days + 1)]
@@ -785,7 +799,7 @@ def find_shows(city, lat=None, lng=None, radius_km=6.0, film=None, language=None
 
     meta["cinemas_searched"] = sorted({s["cinema"] for s in shows})
 
-    now_ms = datetime.datetime.now().timestamp() * 1000
+    now_ms = now_ist().timestamp() * 1000
     out = []
     for show in shows:
         if film:
@@ -805,8 +819,7 @@ def find_shows(city, lat=None, lng=None, radius_km=6.0, film=None, language=None
         if time_to and show["time"] and _minutes(show["time"]) > _minutes(time_to):
             continue
 
-        show["state"], show["state_verified"] = show_status(show, None,
-                                                            datetime.datetime.now())
+        show["state"], show["state_verified"] = show_status(show, None, now_ist())
         if bookable_only and show["state"] not in BOOKABLE:
             continue
         show["distance_km"] = haversine_km(centre[0], centre[1],
@@ -1143,7 +1156,7 @@ def show_status(show, report=None, now=None):
     verified=False means the state was inferred without looking at inventory -
     the caller must not present it as definitely bookable.
     """
-    now = now or datetime.datetime.now()
+    now = now or now_ist()
     stamp = now.timestamp() * 1000
 
     if show.get("ends_ts") and stamp > show["ends_ts"]:

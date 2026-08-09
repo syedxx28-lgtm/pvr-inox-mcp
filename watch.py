@@ -198,7 +198,7 @@ def lead_ok(show, watch, now_ms):
 def diff(watch, previous, snapshot):
     """Compare against the last run and return a list of alert-worthy events."""
     events = []
-    now_ms = int(datetime.datetime.now().timestamp() * 1000)
+    now_ms = int(core.now_ist().timestamp() * 1000)
     open_now = {d: v for d, v in snapshot.items() if v is not None}
 
     for date_str in sorted(open_now):
@@ -361,7 +361,7 @@ def stream(config, state, args, state_path):
     import time
 
     while True:
-        today = datetime.date.today()
+        today = core.today_ist()
         for watch in config["watches"]:
             if not watch.get("enabled", True):
                 continue
@@ -435,7 +435,7 @@ def main():
     if args.stream:
         return stream(config, state, args, state_path)
 
-    today = datetime.date.today()
+    today = core.today_ist()
     fired = 0
 
     for watch in config["watches"]:

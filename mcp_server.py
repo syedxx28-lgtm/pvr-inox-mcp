@@ -202,7 +202,7 @@ def _validate(city, cinema_id=None, date=None):
             when = datetime.date.fromisoformat(date)
         except ValueError:
             return _err("BAD_DATE", "%r is not an ISO date (YYYY-MM-DD)." % date)
-        today = datetime.date.today()
+        today = core.today_ist()
         if when < today:
             return _err("DATE_IN_PAST",
                         "%s has already passed (today is %s). It will not go on sale."
@@ -938,7 +938,7 @@ def pvr_publish_watches(message: str = "") -> str:
 def _today():
     import datetime
 
-    return datetime.date.today().isoformat()
+    return core.today_ist().isoformat()
 
 
 @mcp.custom_route("/icon.png", methods=["GET"])
