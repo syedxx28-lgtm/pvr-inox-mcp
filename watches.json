@@ -13,12 +13,44 @@
    "experience": "imax",
    "language": "English",
    "horizon_days": 16,
-   "weekdays": ["Sat", "Sun"],
+   "weekdays": [
+    "Sat",
+    "Sun"
+   ],
    "alert_on_restock": true,
    "seat_detail": true,
-   "zone_rows": ["F", "E", "D", "C"],
-   "zone_seats": [11, 21],
+   "zone_rows": [
+    "F",
+    "E",
+    "D",
+    "C"
+   ],
+   "zone_seats": [
+    11,
+    21
+   ],
    "min_adjacent": 1,
+   "min_lead_minutes": 90
+  },
+  {
+   "name": "The Odyssey - IMAX - Phoenix Velachery",
+   "enabled": true,
+   "provider": "pvr",
+   "city": "Chennai",
+   "cinema_id": "320",
+   "cinema_slug": "INOX-Luxe-Phoenix-Market-City,-Velachery--(formerly-Jazz-Cinemas)Chennai",
+   "lat": "12.99193469",
+   "lng": "80.21682184",
+   "film_contains": "ODYSSEY",
+   "horizon_days": 16,
+   "alert_on_restock": true,
+   "seat_detail": true,
+   "min_adjacent": 1,
+   "experience": "imax",
+   "weekdays": [
+    "Sat",
+    "Sun"
+   ],
    "min_lead_minutes": 90
   }
  ]
