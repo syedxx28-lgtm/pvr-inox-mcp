@@ -607,9 +607,13 @@ def _centre_block(row):
     return blocks[-1]
 
 
-# Rows are returned front-first (nearest the screen). The stretch from 60% to
-# 85% back is the usual big-screen sweet spot: far enough that the screen fills
-# your view without craning, short of the back wall.
+# Rows are returned FRONT-FIRST (nearest the screen), and the letters descend
+# toward the back: Palazzo AUDI 5 runs O..A, Pune Insignia runs E..A. Row A is
+# the BACK row in this chain's data, not the front. Reading the letters as
+# front-to-back is what makes a correct back-row zone look "inverted".
+#
+# The stretch from 60% to 85% back is the usual big-screen sweet spot: far
+# enough that the screen fills your view without craning, short of the wall.
 BAND_FROM, BAND_TO = 0.60, 0.85
 
 
@@ -652,6 +656,23 @@ def resolve_zone(seat_rows, zone_rows=None, zone_seats=None):
                     pass
         zone[row.get("n")] = numbers
     return zone
+
+
+def _seat_no(label):
+    """Numeric part of a seat label, for ordering. 'B11' -> 11."""
+    digits = "".join(ch for ch in str(label) if ch.isdigit())
+    return int(digits) if digits else 0
+
+
+def _span(run):
+    """'B1-B11' regardless of which way the row is numbered in the payload.
+
+    Some rows are stored right-to-left, which produced ranges like "B11-B1".
+    """
+    if len(run) == 1:
+        return run[0]
+    lo, hi = min(run, key=_seat_no), max(run, key=_seat_no)
+    return "%s-%s" % (lo, hi)
 
 
 def _row_runs(row, free_only=True):
@@ -732,9 +753,7 @@ def seat_report(token, zone_rows=None, zone_seats=None, want_map=False, party_si
                 run.append(label)
                 if len(run) > best_run:
                     best_run = len(run)
-                    best_where = (
-                        run[0] if len(run) == 1 else "%s-%s" % (run[0], run[-1])
-                    )
+                    best_where = _span(run)
             else:
                 run = []
 
@@ -751,13 +770,14 @@ def seat_report(token, zone_rows=None, zone_seats=None, want_map=False, party_si
             continue
         in_zone = bool(zone.get(name))
         best = max(runs, key=lambda r: r[2])
+        best_labels = None
         elsewhere.append(
             {
                 "row": name,
                 "in_zone": in_zone,
                 "free": sum(r[2] for r in runs),
                 "best_run": best[2],
-                "best_where": best[0] if best[2] == 1 else "%s-%s" % (best[0], best[1]),
+                "best_where": _span([best[0], best[1]]) if best[2] > 1 else best[0],
                 # Rows are listed front-first; further back is generally better,
                 # so rank alternatives by depth without pretending it is precise.
                 "depth": seat_rows.index(row) / max(1, len(seat_rows) - 1),
