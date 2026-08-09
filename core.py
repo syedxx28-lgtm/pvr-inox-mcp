@@ -411,6 +411,56 @@ def parse_title(raw):
     return out
 
 
+_VARIANTS = {}
+
+
+def film_variants(city, lat=None, lng=None):
+    """filmId -> the ACTUAL print: name, language, format.
+
+    A movie block in the schedule carries ONE variant's title while the shows
+    inside it span many. At Palazzo a block titled "SPIDERMAN BRAND NEW DAY
+    (TAMIL)" held eight filmIds including two English prints - so stamping the
+    block title onto every show inside it hides real English screenings. The
+    per-show `movieId` is the true identity; this maps it to the print.
+
+    One cached call per city per day.
+    """
+    key = (str(city).lower(), datetime.date.today().isoformat())
+    if key in _VARIANTS:
+        return _VARIANTS[key]
+
+    fallback = city_coords(city)
+    try:
+        payload = _post(
+            "content/nowshowing",
+            {"city": city, "lat": str(lat or fallback[0]), "lng": str(lng or fallback[1])},
+            city,
+        )
+    except Exception:
+        return {}  # never let this break a showtimes lookup
+
+    found = {}
+
+    def walk(node):
+        if isinstance(node, dict):
+            if node.get("filmId") and node.get("filmName"):
+                found[str(node["filmId"])] = {
+                    "name": node["filmName"],
+                    "language": node.get("language"),
+                    "format": node.get("format") or "",
+                    "subtitle": node.get("subtitle") or "",
+                }
+            for value in node.values():
+                walk(value)
+        elif isinstance(node, list):
+            for value in node:
+                walk(value)
+
+    walk(payload.get("output") or {})
+    _VARIANTS[key] = found
+    return found
+
+
 def day_sessions(city, cinema_id, date, lat=None, lng=None):
     """Sessions at one cinema on one date. Returns (shows, error).
 
@@ -441,23 +491,30 @@ def day_sessions(city, cinema_id, date, lat=None, lng=None):
     if payload.get("status") != 302 or not payload.get("output"):
         return None, "closed"
 
+    variants = film_variants(city, lat, lng)
+
     shows = []
     for movie in payload["output"].get("cinemaMovieSessions") or []:
         movie_re = movie.get("movieRe") or {}
-        film = movie_re.get("filmName", "")
-        parsed = parse_title(film)
+        block_title = movie_re.get("filmName", "")
         for exp in movie.get("experienceSessions") or []:
             for show in exp.get("shows") or []:
-                # THE TITLE WINS. The per-show `language` field is not
-                # trustworthy: in a Chennai sample, 27 shows titled
-                # "SPIDERMAN BRAND NEW DAY (TAMIL)" reported language
-                # "English" - same film, same cinemas, contradicting the title
-                # the box office actually displays. Trusting that field is how
-                # you send someone to a dub. The parenthetical is the schedule.
-                # The field is used only where the title carries no language,
-                # and any disagreement is recorded rather than smoothed over.
-                language = parsed["language"] or lang_code(show.get("language"))
-                field_code = lang_code(show.get("language"))
+                # Resolve the show to its OWN print. A movie block carries ONE
+                # variant's title while the shows inside it span many: at
+                # Palazzo, a block titled "SPIDERMAN BRAND NEW DAY (TAMIL)"
+                # held eight filmIds including two English prints. Stamping the
+                # block title onto every show hid real English screenings.
+                variant = variants.get(str(show.get("movieId"))) or {}
+                film = variant.get("name") or block_title
+                parsed = parse_title(film)
+
+                # Once the title is the right one, title and field agree. The
+                # field is per-show and unambiguous, so it leads; the parsed
+                # title covers the case where the field is absent.
+                field_code = lang_code(show.get("language")) or lang_code(
+                    variant.get("language")
+                )
+                language = field_code or parsed["language"]
                 disputed = bool(
                     parsed["language"] and field_code and parsed["language"] != field_code
                 )
@@ -478,10 +535,11 @@ def day_sessions(city, cinema_id, date, lat=None, lng=None):
                     {
                         "film": film,
                         "title": movie_re.get("n") or parsed["title"],
+                        "variant_id": show.get("movieId"),
                         "canonical_film_id": movie_re.get("id"),
                         "language": language,
-                        "language_source": "title" if parsed["language"] else (
-                            "api_field" if field_code else None
+                        "language_source": (
+                            "variant" if variant else ("api_field" if field_code else "block_title")
                         ),
                         "language_disputed": disputed,
                         "language_name": show.get("language") or None,

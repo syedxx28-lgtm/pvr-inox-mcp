@@ -50,15 +50,14 @@ Things that matter when answering:
   enough for the party, with a ready-made zone_rows to re-call with. Do that
   before telling anyone a show is unusable. Always pass party_size.
 
-- LANGUAGE has THREE sources and only one is trustworthy. The release list in
-  pvr_now_showing is wrong often enough to be dangerous. The upstream per-show
-  language field is ALSO wrong - 27 shows titled "...(TAMIL)" reported
-  "English" in one Chennai sample. The authority is the TITLE parenthetical,
-  which is what the box office displays. pvr_showtimes exposes `language` as an
-  ISO code derived from the title, with `language_source` and
-  `language_disputed` so you can see when the upstream field disagreed.
-  Filter with language="en"; a show whose language is unknown is never a match.
-  Never tell a user an English show exists on the strength of a release list.
+- LANGUAGE is per SHOW, not per film. One film has many prints (Tamil, 3D
+  Tamil, English, 3D English Atmos...) and a single cinema runs several of them
+  the same day. The schedule groups them under ONE block title, so a block
+  reading "SPIDERMAN BRAND NEW DAY (TAMIL)" can contain English shows - eight
+  of them at Palazzo on 2026-08-09. pvr_showtimes resolves each show to its own
+  print and exposes `language` (ISO), `variant_id` and the full variant title.
+  Filter with language="en". Do NOT judge a film's languages from the block
+  title or from the release list in pvr_now_showing; both mislead.
 
 - ERRORS START WITH "ERROR <CODE>:" and are not availability facts.
   CITY_NOT_SERVICED, CINEMA_NOT_FOUND, DATE_IN_PAST, BEYOND_BOOKING_WINDOW,
