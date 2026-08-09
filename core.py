@@ -115,11 +115,29 @@ def _pace():
         _last_call[0] = time.monotonic()
 
 
+# Where the upstream refuses a caller's IP - it blocks GitHub's runners - the
+# request can be routed through our own deployed service instead, whose IP it
+# accepts. Set PVR_PROXY_BASE + PVR_PROXY_TOKEN to switch a client over. The
+# service itself must NOT set these, or it would call itself.
+def _proxy_target():
+    base = os.environ.get("PVR_PROXY_BASE", "").rstrip("/")
+    token = os.environ.get("PVR_PROXY_TOKEN", "")
+    return (base, token) if (base and token) else (None, None)
+
+
 def _post(path, body, city="Chennai", timeout=30):
     _pace()
-    req = urllib.request.Request(
-        "%s/%s" % (API, path), json.dumps(body).encode(), _headers(city)
-    )
+    base, token = _proxy_target()
+    if base:
+        req = urllib.request.Request(
+            "%s/proxy/%s" % (base, path),
+            json.dumps(body).encode(),
+            {"Content-Type": "application/json", "x-proxy-token": token, "x-city": city},
+        )
+    else:
+        req = urllib.request.Request(
+            "%s/%s" % (API, path), json.dumps(body).encode(), _headers(city)
+        )
     try:
         return json.load(urllib.request.urlopen(req, timeout=timeout))
     except urllib.error.HTTPError as exc:

@@ -20,7 +20,7 @@ from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import Icon, ToolAnnotations
 
 import core
-from starlette.responses import FileResponse
+from starlette.responses import FileResponse, JSONResponse
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(HERE, "watches.json")
@@ -939,6 +939,49 @@ def _today():
     import datetime
 
     return core.today_ist().isoformat()
+
+
+# Only the endpoints this project actually uses. An open forwarder would let
+# anyone route arbitrary traffic through this service's IP.
+PROXY_PATHS = {
+    "content/csessions",
+    "content/cinemasessions",
+    "content/cinemas",
+    "content/nowshowing",
+    "content/city",
+    "ticketing/seatlayout",
+}
+
+
+@mcp.custom_route("/proxy/{path:path}", methods=["POST"])
+async def _proxy(request):
+    """Forward one upstream call, for clients whose IP the chain refuses.
+
+    Token-gated: this lends out the service's IP reputation, which is the whole
+    point and also the risk.
+    """
+    token = os.environ.get("PVR_PROXY_TOKEN", "")
+    if not token:
+        return JSONResponse({"error": "proxy_disabled"}, status_code=404)
+    if request.headers.get("x-proxy-token") != token:
+        return JSONResponse({"error": "forbidden"}, status_code=403)
+
+    path = request.path_params["path"]
+    if path not in PROXY_PATHS:
+        return JSONResponse({"error": "path_not_allowed", "path": path}, status_code=404)
+
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "bad_json"}, status_code=400)
+
+    try:
+        data = core._post(path, body, request.headers.get("x-city", "Chennai"))
+    except core.Blocked as exc:
+        return JSONResponse({"error": "blocked", "detail": str(exc)}, status_code=429)
+    except Exception as exc:
+        return JSONResponse({"error": "upstream", "detail": str(exc)}, status_code=502)
+    return JSONResponse(data)
 
 
 @mcp.custom_route("/icon.png", methods=["GET"])
