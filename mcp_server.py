@@ -65,6 +65,12 @@ Things that matter when answering:
   and shows up on screenings hours in the future. Only ON_SALE and LIMITED are
   bookable. A trailing "?" means inventory was not counted.
 
+- START WITH pvr_find_shows for anything constrained ("English, tonight, near
+  me, 2 together"). It takes party_size (required), a radius, a date range, and
+  returns ranked bookable shows with seat blocks and booking links in ONE call.
+  It reports which cinemas it did NOT search - never present its results as
+  city-wide coverage.
+
 - BOOKING HANDOFF: every bookable show carries `booking_url`, which opens the
   seat-selection screen for that exact show. Give it to the user rather than
   telling them to find the show in the app.
@@ -502,6 +508,8 @@ def pvr_seats(
         report, seat_err = core.seat_report(
             show["token"], rows, seats, want_map=seat_map, party_size=max(1, party_size)
         )
+        if not seat_err:
+            core.remember_geometry(cinema_id, show.get("screen"), report)
         if seat_err:
             lines.append("%-9s %s" % (show["time"], seat_err))
             continue
@@ -558,6 +566,152 @@ def pvr_seats(
         "-" * 92,
     )
     return _out(results, header + "\n" + "\n".join(lines), format)
+
+
+@mcp.tool(annotations=_LOOKUP)
+def pvr_find_shows(
+    city: str,
+    party_size: int,
+    lat: str = "",
+    lng: str = "",
+    radius_km: float = 6.0,
+    film: str = "",
+    language: str = "",
+    experience: str = "",
+    date: str = "",
+    date_to: str = "",
+    time_from: str = "",
+    time_to: str = "",
+    bookable_only: bool = True,
+    sort: str = "relevance",
+    limit: int = 20,
+    format: str = "text",
+) -> str:
+    """Answer a whole constrained query in one call: what can I actually book?
+
+    "English, tonight, within 8 km, 2 seats together" resolves here rather than
+    through one call per cinema. One request covers every cinema within ~4-5 km
+    of a point, so a "near me" search is cheap; a city-wide search is not, and
+    anything not searched is listed rather than silently dropped.
+
+    party_size is REQUIRED and drives availability: a show whose largest free
+    block is smaller than the party is not a result.
+
+    date_to searches a range - ask for tonight and tomorrow in one call.
+
+    On zero results it relaxes constraints in order (seat block -> radius ->
+    time window) and says what it relaxed. Film and language are never relaxed.
+    """
+    if party_size is None or party_size < 1:
+        return _err("PARTY_SIZE_REQUIRED",
+                    "party_size must be 1 or more - availability is judged against it.")
+    bad = _validate(city, None, date or None)
+    if bad:
+        return bad
+
+    def run(**over):
+        args = dict(city=city, lat=lat or None, lng=lng or None, radius_km=radius_km,
+                    film=film or None, language=language or None,
+                    experience=experience or None, date=date or None,
+                    date_to=date_to or None, time_from=time_from or None,
+                    time_to=time_to or None, party_size=party_size,
+                    bookable_only=bookable_only, sort=sort, limit=limit)
+        args.update(over)
+        return core.find_shows(**args)
+
+    results, meta = run()
+
+    # R-P0-7: relax in a documented order, never film or language.
+    if not results:
+        ladder = [
+            ("seat block", {"party_size": 1}),
+            ("radius", {"radius_km": max(radius_km * 2.5, 15)}),
+            ("time window", {"time_from": None, "time_to": None}),
+        ]
+        applied = {}
+        for label, over in ladder:
+            applied.update(over)
+            results, meta = run(**applied)
+            if results:
+                # Report only what the RESULTS actually give up. Relaxing a
+                # constraint internally then returning rows that satisfy it
+                # anyway is not a relaxation - saying so would be a small lie.
+                given_up = {}
+                if party_size > 1 and any(
+                    (r.get("seats") or {}).get("best_run", 0) < party_size for r in results
+                ):
+                    given_up["seats together"] = "some results seat fewer than %d" % party_size
+                widest = max((r.get("distance_km") or 0) for r in results)
+                if widest > radius_km:
+                    given_up["radius"] = "widened to %.1f km (you asked for %.0f)" % (
+                        widest, radius_km)
+                if (time_from or time_to) and any(
+                    (time_to and core._minutes(r["time"]) > core._minutes(time_to))
+                    or (time_from and core._minutes(r["time"]) < core._minutes(time_from))
+                    for r in results
+                ):
+                    given_up["time window"] = "outside the window you gave"
+                meta["relaxed"] = given_up
+                break
+
+    if not results:
+        return _err("NO_MATCH",
+                    "Nothing bookable matches, even after relaxing seats, radius and time.",
+                    searched=meta.get("cinemas_searched"),
+                    not_searched=meta.get("cinemas_skipped"),
+                    calls=meta.get("calls"))
+
+    lines = []
+    if meta.get("relaxed"):
+        for what, how in sorted(meta["relaxed"].items()):
+            lines.append("RELAXED %s - %s" % (what, how))
+        lines.append("")
+    for r in results:
+        seats = r.get("seats")
+        block = ""
+        if seats and seats.get("best_run"):
+            block = "%d together %s" % (seats["best_run"], seats["best_where"])
+        elif seats:
+            block = "no block of %d" % party_size
+        lines.append("%s  %s  %s" % (
+            r["date"], r["time"], (r["title"] or r["film"])[:38]))
+        lines.append("   %-34s %s%s %s" % (
+            r["cinema"][:34],
+            ("%.1f km  " % r["distance_km"]) if r.get("distance_km") is not None else "",
+            r["state"] + ("" if r.get("state_verified") else "?"),
+            ("· " + block) if block else ""))
+        if r.get("booking_url"):
+            lines.append("   %s" % r["booking_url"])
+    lines.append("")
+    lines.append("searched %d cinema(s) in %d call(s)%s" % (
+        len(meta.get("cinemas_searched") or []), meta.get("calls", 0),
+        ("; NOT searched: " + ", ".join(meta["cinemas_skipped"][:4]))
+        if meta.get("cinemas_skipped") else ""))
+    return _out({"results": results, "meta": meta}, "\n".join(lines), format)
+
+
+@mcp.tool(annotations=_LOOKUP)
+def pvr_screens(city: str = "", cinema_id: str = "", format: str = "text") -> str:
+    """Screen sizes for a cinema - seat count and size class per auditorium.
+
+    The chain publishes no screen inventory, so this is built up from seat maps
+    already fetched for other questions: hall geometry never changes, so each
+    one is learned once and kept. A screen appears here after any call has
+    looked at its seats.
+
+    Use it for "which is the biggest screen" instead of guessing from a name
+    like LASER 4.
+    """
+    rows = core.known_screens(cinema_id or None)
+    if not rows:
+        return ("No screens learned yet%s. Geometry is recorded whenever a seat "
+                "map is fetched - run pvr_seats on a show at this cinema first."
+                % (" for cinema %s" % cinema_id if cinema_id else ""))
+    lines = ["%-8s %-14s %7s  %s" % ("CINEMA", "SCREEN", "SEATS", "SIZE"), "-" * 44]
+    for r in rows:
+        lines.append("%-8s %-14s %7s  %s" % (
+            r["cinema_id"], r["screen"][:14], r["seats"], r["size_class"]))
+    return _out(rows, "\n".join(lines), format)
 
 
 @mcp.tool(annotations=_LOOKUP)

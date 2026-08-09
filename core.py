@@ -598,6 +598,270 @@ def day_sessions(city, cinema_id, date, lat=None, lng=None):
     return sorted(shows, key=lambda s: s["ts"]), None
 
 
+# The multi-cinema endpoint answers for everything within ~4-5 km of the
+# coordinates it is given (measured: included max 3.7 km, excluded min 5.3 km).
+# So a city is covered by a few anchor calls rather than one call per cinema -
+# 16 Chennai venues collapse to ~5 requests, which is what makes a solver
+# affordable against an upstream that blocks heavy callers (D22).
+ANCHOR_RADIUS_KM = 4.0
+
+
+def _anchor_set(cinemas, radius_km=ANCHOR_RADIUS_KM, cap=8):
+    """Fewest anchor cinemas covering the rest. Returns (anchors, unreachable).
+
+    Greedy set cover over an explicit uncovered set, so an anchor always covers
+    itself and the loop cannot stall.
+    """
+    placed = [c for c in cinemas if c.get("lat") and c.get("lng")]
+    unreachable = [c for c in cinemas if not (c.get("lat") and c.get("lng"))]
+
+    def covers(anchor):
+        return {
+            o["cinema_id"] for o in placed
+            if (haversine_km(anchor["lat"], anchor["lng"], o["lat"], o["lng"]) or 999)
+            <= radius_km
+        }
+
+    uncovered = {c["cinema_id"] for c in placed}
+    anchors = []
+    while uncovered and len(anchors) < cap:
+        best, best_gain = None, set()
+        for candidate in placed:
+            gain = covers(candidate) & uncovered
+            if len(gain) > len(best_gain):
+                best, best_gain = candidate, gain
+        if not best:
+            break
+        anchors.append(best)
+        uncovered -= best_gain
+
+    unreachable += [c for c in placed if c["cinema_id"] in uncovered]
+    return anchors, unreachable
+
+
+def sessions_near(city, anchor, date, variants=None):
+    """Every cinema's schedule within the anchor's radius - ONE request."""
+    body = {
+        "city": city,
+        "cinemaId": str(anchor["cinema_id"]),  # must be a real id; "" returns nothing
+        "dated": date,
+        "filters": [],
+        "lat": str(anchor["lat"]),
+        "lng": str(anchor["lng"]),
+    }
+    try:
+        payload = _post("content/cinemasessions", body, city)
+    except Blocked as exc:
+        return None, "blocked: %s" % exc
+    except Exception as exc:
+        return None, "error %s" % exc
+    if payload.get("status") != 302 or not payload.get("output"):
+        return [], None
+
+    variants = variants if variants is not None else film_variants(city)
+    shows = []
+    for block in payload["output"].get("showTimeSessions") or []:
+        cinema = block.get("cinemaRe") or {}
+        for movie in block.get("cinemaMovieSessions") or []:
+            movie_re = movie.get("movieRe") or {}
+            block_title = movie_re.get("filmName", "")
+            for exp in movie.get("experienceSessions") or []:
+                for show in exp.get("shows") or []:
+                    variant = variants.get(str(show.get("movieId"))) or {}
+                    film = variant.get("name") or block_title
+                    parsed = parse_title(film)
+                    code = lang_code(show.get("language")) or lang_code(variant.get("language"))
+                    shows.append({
+                        "cinema_id": cinema.get("theatreId"),
+                        "cinema": cinema.get("name", ""),
+                        "cinema_lat": cinema.get("latitude"),
+                        "cinema_lng": cinema.get("longitude"),
+                        "film": film,
+                        "title": movie_re.get("n") or parsed["title"],
+                        "canonical_film_id": movie_re.get("id"),
+                        "variant_id": show.get("movieId"),
+                        "language": code or parsed["language"],
+                        "subtitle_language": parsed["subtitle_language"],
+                        "formats": parsed["formats"],
+                        "experience": exp.get("experienceKey", ""),
+                        "date": show.get("showDate"),
+                        "time": show.get("showTime"),
+                        "ts": show.get("showTimeStamp") or 0,
+                        "ends_ts": show.get("endTimeStamp") or 0,
+                        "screen": show.get("screenName", ""),
+                        "status": show.get("statusTxt", ""),
+                        "token": show.get("encrypted", ""),
+                        "booking_url": ("https://www.pvrcinemas.com/seatlayout/%s"
+                                        % show["encrypted"]) if show.get("encrypted") else None,
+                    })
+    return shows, None
+
+
+def find_shows(city, lat=None, lng=None, radius_km=6.0, film=None, language=None,
+               experience=None, date=None, date_to=None, time_from=None, time_to=None,
+               party_size=1, bookable_only=True, sort="relevance", limit=20,
+               seat_budget=12, call_budget=10):
+    """The solver. Returns (results, meta).
+
+    Radius-first by design. One request answers for every cinema within ~4-5 km
+    of a point, so "near me tonight" costs a single call. Covering a whole city
+    is the expensive case - Chennai's 16 venues need ~12 anchors - so wide
+    searches are capped and whatever was NOT searched is reported rather than
+    silently dropped.
+
+    Seat maps cost one request each, so they are fetched only for the best
+    candidates after ranking, and only when party_size or seat detail matters.
+    """
+    meta = {"calls": 0, "cinemas_searched": [], "cinemas_skipped": [],
+            "dates": [], "relaxed": {}, "notes": []}
+
+    centre = (lat, lng) if (lat and lng) else city_coords(city)
+    if not centre:
+        return [], dict(meta, error="NO_ORIGIN",
+                        notes=["%s publishes no coordinates; pass lat/lng." % city])
+
+    cinemas = list_cinemas(city, centre[0], centre[1])
+    meta["calls"] += 1
+    in_range = [c for c in cinemas
+                if (haversine_km(centre[0], centre[1], c.get("lat"), c.get("lng")) or 9e9) <= radius_km]
+    if not in_range:
+        return [], dict(meta, error="NOTHING_IN_RADIUS",
+                        notes=["No cinema within %.0f km." % radius_km])
+
+    meta["cinemas_skipped"] = []
+
+    start = datetime.date.fromisoformat(date) if date else datetime.date.today()
+    end = datetime.date.fromisoformat(date_to) if date_to else start
+    days = [(start + datetime.timedelta(days=i)).isoformat()
+            for i in range((end - start).days + 1)]
+    meta["dates"] = days
+
+    variants = film_variants(city, centre[0], centre[1])
+    seen, shows = set(), []
+
+    # Per-cinema lookups only. The multi-cinema endpoint looked like the cheap
+    # path - one request covers everything within ~4-5 km - but it IGNORES the
+    # requested date and lags across midnight (at 00:02 on 10 Aug it still
+    # served 9 Aug). A solver cannot be built on a source that answers for a
+    # day you did not ask about, so cost is controlled by radius and budget
+    # instead, and whatever is left unsearched is reported.
+    nearest = sorted(
+        in_range,
+        key=lambda c: haversine_km(centre[0], centre[1], c.get("lat"), c.get("lng")) or 9e9,
+    )
+    per_day = max(1, (call_budget - 1) // max(1, len(days)))
+    searched = nearest[:per_day]
+    if len(searched) < len(nearest):
+        meta["cinemas_skipped"] += [c["name"] for c in nearest[len(searched):]]
+        meta["notes"].append(
+            "searched the %d nearest of %d cinemas in radius; raise call_budget "
+            "or narrow radius_km to change that" % (len(searched), len(nearest)))
+
+    for day in days:
+        for place in searched:
+            batch, err = day_sessions(city, place["cinema_id"], day,
+                                      place.get("lat"), place.get("lng"))
+            meta["calls"] += 1
+            if err == "closed":
+                meta["notes"].append("%s not on sale at %s" % (day, place["name"][:24]))
+                continue
+            if err:
+                meta["notes"].append("%s @ %s: %s" % (day, place["name"][:24], err))
+                if str(err).startswith("blocked"):
+                    return shows and [], dict(meta, error="UPSTREAM_BLOCKED")
+                continue
+            for show in batch or []:
+                if show.get("date") and show["date"] != day:
+                    continue
+                show["cinema"] = place["name"]
+                show["cinema_id"] = place["cinema_id"]
+                show["cinema_lat"] = place.get("lat")
+                show["cinema_lng"] = place.get("lng")
+                key = (show["cinema_id"], show["date"], show["time"], show["screen"])
+                if key in seen:
+                    continue
+                seen.add(key)
+                shows.append(show)
+
+    meta["cinemas_searched"] = sorted({s["cinema"] for s in shows})
+
+    now_ms = datetime.datetime.now().timestamp() * 1000
+    out = []
+    for show in shows:
+        if film:
+            needle = film.upper()
+            if not (needle in (show["film"] or "").upper()
+                    or needle in (show["title"] or "").upper()
+                    or needle == str(show.get("canonical_film_id") or "")):
+                continue
+        if language:
+            wanted = lang_code(language) or language.lower()
+            if show.get("language") != wanted:
+                continue
+        if experience and show["experience"] != experience:
+            continue
+        if time_from and show["time"] and _minutes(show["time"]) < _minutes(time_from):
+            continue
+        if time_to and show["time"] and _minutes(show["time"]) > _minutes(time_to):
+            continue
+
+        show["state"], show["state_verified"] = show_status(show, None,
+                                                            datetime.datetime.now())
+        if bookable_only and show["state"] not in BOOKABLE:
+            continue
+        show["distance_km"] = haversine_km(centre[0], centre[1],
+                                           show.get("cinema_lat"), show.get("cinema_lng"))
+        out.append(show)
+
+    out.sort(key=lambda s: _rank_key(s, sort, radius_km))
+
+    # Seat maps only for the shortlist - each one is a request.
+    for show in out[:seat_budget]:
+        if not show.get("token"):
+            continue
+        report, err = seat_report(show["token"], party_size=party_size)
+        meta["calls"] += 1
+        if err:
+            continue
+        show["seats"] = report
+        show["state"], show["state_verified"] = show_status(show, report)
+    if party_size > 1:
+        out = [s for s in out
+               if not s.get("seats") or s["seats"]["best_run"] >= party_size
+               or not bookable_only]
+
+    return out[:limit], meta
+
+
+def _minutes(text):
+    """'07:40 PM' or '19:40' -> minutes since midnight."""
+    text = str(text).strip().upper()
+    try:
+        if "AM" in text or "PM" in text:
+            hhmm, ampm = text[:-2].strip(), text[-2:]
+            hh, mm = (hhmm.split(":") + ["0"])[:2]
+            hh = int(hh) % 12 + (12 if ampm == "PM" else 0)
+            return hh * 60 + int(mm)
+        hh, mm = (text.split(":") + ["0"])[:2]
+        return int(hh) * 60 + int(mm)
+    except (ValueError, IndexError):
+        return 0
+
+
+def _rank_key(show, sort, radius_km):
+    if sort == "distance":
+        return (show.get("distance_km") or 9e9, show.get("ts") or 0)
+    if sort == "time":
+        return (show.get("ts") or 0,)
+    if sort == "seat_quality":
+        seats = show.get("seats") or {}
+        return (-(seats.get("best_run") or 0), show.get("ts") or 0)
+    # relevance: soonest first, then nearest - the two axes a person actually
+    # trades off when deciding where to go tonight.
+    return ((show.get("distance_km") or 9e9) / max(radius_km, 1) * 120
+            + (show.get("ts") or 0) / 60000.0,)
+
+
 def is_open(city, cinema_id, date, lat=None, lng=None):
     """Is this date on sale yet?"""
     shows, err = day_sessions(city, cinema_id, date, lat, lng)
@@ -840,6 +1104,7 @@ def seat_report(token, zone_rows=None, zone_seats=None, want_map=False, party_si
         "best_where": best_where,
         "seats": zone_names[:60],
         "zone_rows": [r for r in zone if zone[r]],
+        "rows_seen": [r.get("n") for r in seat_rows],
         "party_size": party_size,
         "meets_party_size": best_run >= max(1, party_size),
         "free_outside_zone": free - zone_free,
@@ -899,6 +1164,65 @@ def show_status(show, report=None, now=None):
 
     # Future and sellable, but nothing has counted the seats yet.
     return "ON_SALE", False
+
+
+# Hall geometry does not change between screenings, so a seat map fetched once
+# answers "how big is that screen" forever. This is what makes D8 (no screen
+# inventory) solvable without an endpoint for it.
+_GEOMETRY = {}
+GEOMETRY_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "screens.json")
+
+
+def _load_geometry():
+    if _GEOMETRY:
+        return _GEOMETRY
+    try:
+        with open(GEOMETRY_PATH) as fh:
+            _GEOMETRY.update(json.load(fh))
+    except (OSError, ValueError):
+        pass
+    return _GEOMETRY
+
+
+def remember_geometry(cinema_id, screen, report):
+    """Record a screen's shape from a seat map we already had to fetch."""
+    if not (cinema_id and screen and report and report.get("total")):
+        return
+    key = "%s|%s" % (cinema_id, screen)
+    store = _load_geometry()
+    if key in store:
+        return
+    store[key] = {
+        "cinema_id": str(cinema_id),
+        "screen": screen,
+        "seats": report["total"],
+        "rows": len(report.get("rows_seen") or []) or None,
+        "size_class": size_class(report["total"]),
+    }
+    try:
+        with open(GEOMETRY_PATH, "w") as fh:
+            json.dump(store, fh, indent=1, sort_keys=True)
+    except OSError:
+        pass
+
+
+def size_class(seats):
+    """Buckets chosen from observed halls: 442 (IMAX), 237, 245, 508, 55."""
+    if not seats:
+        return None
+    if seats >= 400:
+        return "large"
+    if seats >= 180:
+        return "standard"
+    return "small"
+
+
+def known_screens(cinema_id=None):
+    """Every screen whose shape we have learned, optionally for one cinema."""
+    rows = list(_load_geometry().values())
+    if cinema_id:
+        rows = [r for r in rows if r["cinema_id"] == str(cinema_id)]
+    return sorted(rows, key=lambda r: -(r["seats"] or 0))
 
 
 def describe_seats(report):
