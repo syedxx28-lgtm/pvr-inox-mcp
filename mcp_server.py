@@ -65,6 +65,10 @@ Things that matter when answering:
   and shows up on screenings hours in the future. Only ON_SALE and LIMITED are
   bookable. A trailing "?" means inventory was not counted.
 
+- BOOKING HANDOFF: every bookable show carries `booking_url`, which opens the
+  seat-selection screen for that exact show. Give it to the user rather than
+  telling them to find the show in the app.
+
 - ERRORS START WITH "ERROR <CODE>:" and are not availability facts.
   CITY_NOT_SERVICED, CINEMA_NOT_FOUND, DATE_IN_PAST, BEYOND_BOOKING_WINDOW,
   SHOW_NOT_BOOKABLE, SHOW_NOT_FOUND, UPSTREAM_ERROR. A past date is DATE_IN_PAST,
@@ -512,6 +516,8 @@ def pvr_seats(
             "%-9s %-8s %-10s %s"
             % (show["time"], show["experience"] or "-", state, core.describe_seats(report))
         )
+        if show.get("booking_url") and state in core.BOOKABLE:
+            lines.append("   book: %s" % show["booking_url"])
 
         # R-P0-4a: the zone is a heuristic. When it cannot seat the party, say
         # what the zone covered, what exists outside it, and how to widen it -

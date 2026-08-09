@@ -586,6 +586,13 @@ def day_sessions(city, cinema_id, date, lat=None, lng=None):
                         "screen": show.get("screenName", ""),
                         "status": show.get("statusTxt", ""),
                         "token": show.get("encrypted", ""),
+                        # D10: lands on seat selection for THIS show. Verified
+                        # in a browser - the booking summary names the film,
+                        # cinema and showtime.
+                        "booking_url": (
+                            "https://www.pvrcinemas.com/seatlayout/%s" % show["encrypted"]
+                            if show.get("encrypted") else None
+                        ),
                     }
                 )
     return sorted(shows, key=lambda s: s["ts"]), None
