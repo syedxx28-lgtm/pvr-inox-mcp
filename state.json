@@ -1,8 +1,730 @@
 {
- "The Odyssey - IMAX - PVR Palazzo": {},
+ "The Odyssey - IMAX - PVR Palazzo": {
+  "2026-08-15": {
+   "2026-08-15|07:05 PM|AUDI 5": {
+    "booking_url": "https://www.pvrcinemas.com/seatlayout/Bw)DtrUas7(PmGuxkT0bqg==",
+    "canonical_film_id": "35098",
+    "date": "2026-08-15",
+    "ends_ts": 1786813800000,
+    "experience": "imax",
+    "film": "THE ODYSSEY (ENGLISH IMAX WITH ENGLISH SUBTITLE)",
+    "format": "IMAX",
+    "formats": [
+     "IMAX"
+    ],
+    "language": "en",
+    "language_disputed": false,
+    "language_name": "English",
+    "language_source": "variant",
+    "screen": "AUDI 5",
+    "seats": {
+     "alternatives": [
+      {
+       "best_run": 10,
+       "best_where": "H22-H31",
+       "depth": 0.5,
+       "free": 17,
+       "in_zone": false,
+       "row": "H"
+      },
+      {
+       "best_run": 10,
+       "best_where": "I22-I31",
+       "depth": 0.42857142857142855,
+       "free": 18,
+       "in_zone": false,
+       "row": "I"
+      },
+      {
+       "best_run": 10,
+       "best_where": "J1-J10",
+       "depth": 0.35714285714285715,
+       "free": 22,
+       "in_zone": false,
+       "row": "J"
+      },
+      {
+       "best_run": 10,
+       "best_where": "K1-K10",
+       "depth": 0.2857142857142857,
+       "free": 28,
+       "in_zone": false,
+       "row": "K"
+      },
+      {
+       "best_run": 11,
+       "best_where": "L11-L21",
+       "depth": 0.21428571428571427,
+       "free": 31,
+       "in_zone": false,
+       "row": "L"
+      },
+      {
+       "best_run": 11,
+       "best_where": "M11-M21",
+       "depth": 0.14285714285714285,
+       "free": 31,
+       "in_zone": false,
+       "row": "M"
+      }
+     ],
+     "best_run": 1,
+     "best_where": "F21",
+     "cinema": "PVR Palazzo-The Nexus Vijaya Mall",
+     "experience": "IMAX",
+     "free": 233,
+     "free_outside_zone": 232,
+     "meets_party_size": true,
+     "party_size": 1,
+     "rows_seen": [
+      "O",
+      "N",
+      "M",
+      "L",
+      "K",
+      "J",
+      "I",
+      "H",
+      "G",
+      "F",
+      "E",
+      "D",
+      "C",
+      "B",
+      "A"
+     ],
+     "seats": [
+      "F21"
+     ],
+     "total": 442,
+     "when": "Sat, 15 Aug, 7:05 PM - 10:40 PM",
+     "zone_free": 1,
+     "zone_rows": [
+      "F",
+      "E",
+      "D",
+      "C"
+     ],
+     "zone_total": 44
+    },
+    "status": "Available",
+    "subtitle_language": "en",
+    "time": "07:05 PM",
+    "title": "THE ODYSSEY",
+    "token": "Bw)DtrUas7(PmGuxkT0bqg==",
+    "ts": 1786800900000,
+    "variant_id": "37656"
+   },
+   "2026-08-15|09:10 AM|AUDI 5": {
+    "booking_url": "https://www.pvrcinemas.com/seatlayout/Bw)DtrUas78XAqv4s2OHmg==",
+    "canonical_film_id": "35098",
+    "date": "2026-08-15",
+    "ends_ts": 1786777980000,
+    "experience": "imax",
+    "film": "THE ODYSSEY (ENGLISH IMAX WITH ENGLISH SUBTITLE)",
+    "format": "IMAX",
+    "formats": [
+     "IMAX"
+    ],
+    "language": "en",
+    "language_disputed": false,
+    "language_name": "English",
+    "language_source": "variant",
+    "screen": "AUDI 5",
+    "seats": {
+     "alternatives": [
+      {
+       "best_run": 10,
+       "best_where": "H22-H31",
+       "depth": 0.5,
+       "free": 19,
+       "in_zone": false,
+       "row": "H"
+      },
+      {
+       "best_run": 10,
+       "best_where": "I1-I10",
+       "depth": 0.42857142857142855,
+       "free": 27,
+       "in_zone": false,
+       "row": "I"
+      },
+      {
+       "best_run": 10,
+       "best_where": "J1-J10",
+       "depth": 0.35714285714285715,
+       "free": 28,
+       "in_zone": false,
+       "row": "J"
+      },
+      {
+       "best_run": 11,
+       "best_where": "K11-K21",
+       "depth": 0.2857142857142857,
+       "free": 31,
+       "in_zone": false,
+       "row": "K"
+      },
+      {
+       "best_run": 11,
+       "best_where": "L11-L21",
+       "depth": 0.21428571428571427,
+       "free": 31,
+       "in_zone": false,
+       "row": "L"
+      },
+      {
+       "best_run": 11,
+       "best_where": "M11-M21",
+       "depth": 0.14285714285714285,
+       "free": 31,
+       "in_zone": false,
+       "row": "M"
+      }
+     ],
+     "best_run": 4,
+     "best_where": "F18-F21",
+     "cinema": "PVR Palazzo-The Nexus Vijaya Mall",
+     "experience": "IMAX",
+     "free": 286,
+     "free_outside_zone": 277,
+     "meets_party_size": true,
+     "party_size": 1,
+     "rows_seen": [
+      "O",
+      "N",
+      "M",
+      "L",
+      "K",
+      "J",
+      "I",
+      "H",
+      "G",
+      "F",
+      "E",
+      "D",
+      "C",
+      "B",
+      "A"
+     ],
+     "seats": [
+      "F18",
+      "F19",
+      "F20",
+      "F21",
+      "E17",
+      "E18",
+      "E19",
+      "E20",
+      "E21"
+     ],
+     "total": 442,
+     "when": "Sat, 15 Aug, 9:10 AM - 12:43 PM",
+     "zone_free": 9,
+     "zone_rows": [
+      "F",
+      "E",
+      "D",
+      "C"
+     ],
+     "zone_total": 44
+    },
+    "status": "Available",
+    "subtitle_language": "en",
+    "time": "09:10 AM",
+    "title": "THE ODYSSEY",
+    "token": "Bw)DtrUas78XAqv4s2OHmg==",
+    "ts": 1786765200000,
+    "variant_id": "37656"
+   },
+   "2026-08-15|12:45 PM|AUDI 5": {
+    "booking_url": "https://www.pvrcinemas.com/seatlayout/Bw)DtrUas79HWmiDcvzsoQ==",
+    "canonical_film_id": "35098",
+    "date": "2026-08-15",
+    "ends_ts": 1786790880000,
+    "experience": "imax",
+    "film": "THE ODYSSEY (ENGLISH IMAX WITH ENGLISH SUBTITLE)",
+    "format": "IMAX",
+    "formats": [
+     "IMAX"
+    ],
+    "language": "en",
+    "language_disputed": false,
+    "language_name": "English",
+    "language_source": "variant",
+    "screen": "AUDI 5",
+    "seats": {
+     "alternatives": [
+      {
+       "best_run": 10,
+       "best_where": "H22-H31",
+       "depth": 0.5,
+       "free": 19,
+       "in_zone": false,
+       "row": "H"
+      },
+      {
+       "best_run": 10,
+       "best_where": "I1-I10",
+       "depth": 0.42857142857142855,
+       "free": 21,
+       "in_zone": false,
+       "row": "I"
+      },
+      {
+       "best_run": 10,
+       "best_where": "J1-J10",
+       "depth": 0.35714285714285715,
+       "free": 23,
+       "in_zone": false,
+       "row": "J"
+      },
+      {
+       "best_run": 10,
+       "best_where": "K1-K10",
+       "depth": 0.2857142857142857,
+       "free": 27,
+       "in_zone": false,
+       "row": "K"
+      },
+      {
+       "best_run": 11,
+       "best_where": "L11-L21",
+       "depth": 0.21428571428571427,
+       "free": 31,
+       "in_zone": false,
+       "row": "L"
+      },
+      {
+       "best_run": 11,
+       "best_where": "M11-M21",
+       "depth": 0.14285714285714285,
+       "free": 31,
+       "in_zone": false,
+       "row": "M"
+      }
+     ],
+     "best_run": 1,
+     "best_where": "F21",
+     "cinema": "PVR Palazzo-The Nexus Vijaya Mall",
+     "experience": "IMAX",
+     "free": 244,
+     "free_outside_zone": 243,
+     "meets_party_size": true,
+     "party_size": 1,
+     "rows_seen": [
+      "O",
+      "N",
+      "M",
+      "L",
+      "K",
+      "J",
+      "I",
+      "H",
+      "G",
+      "F",
+      "E",
+      "D",
+      "C",
+      "B",
+      "A"
+     ],
+     "seats": [
+      "F21"
+     ],
+     "total": 442,
+     "when": "Sat, 15 Aug, 12:45 PM - 4:18 PM",
+     "zone_free": 1,
+     "zone_rows": [
+      "F",
+      "E",
+      "D",
+      "C"
+     ],
+     "zone_total": 44
+    },
+    "status": "Available",
+    "subtitle_language": "en",
+    "time": "12:45 PM",
+    "title": "THE ODYSSEY",
+    "token": "Bw)DtrUas79HWmiDcvzsoQ==",
+    "ts": 1786778100000,
+    "variant_id": "37656"
+   }
+  },
+  "2026-08-16": {
+   "2026-08-16|07:05 PM|AUDI 5": {
+    "booking_url": "https://www.pvrcinemas.com/seatlayout/o3OwJodF74duX5zFgQBSdA==",
+    "canonical_film_id": "35098",
+    "date": "2026-08-16",
+    "ends_ts": 1786900200000,
+    "experience": "imax",
+    "film": "THE ODYSSEY (ENGLISH IMAX WITH ENGLISH SUBTITLE)",
+    "format": "IMAX",
+    "formats": [
+     "IMAX"
+    ],
+    "language": "en",
+    "language_disputed": false,
+    "language_name": "English",
+    "language_source": "variant",
+    "screen": "AUDI 5",
+    "seats": {
+     "alternatives": [
+      {
+       "best_run": 10,
+       "best_where": "H22-H31",
+       "depth": 0.5,
+       "free": 23,
+       "in_zone": false,
+       "row": "H"
+      },
+      {
+       "best_run": 10,
+       "best_where": "I1-I10",
+       "depth": 0.42857142857142855,
+       "free": 24,
+       "in_zone": false,
+       "row": "I"
+      },
+      {
+       "best_run": 11,
+       "best_where": "J11-J21",
+       "depth": 0.35714285714285715,
+       "free": 31,
+       "in_zone": false,
+       "row": "J"
+      },
+      {
+       "best_run": 11,
+       "best_where": "K11-K21",
+       "depth": 0.2857142857142857,
+       "free": 31,
+       "in_zone": false,
+       "row": "K"
+      },
+      {
+       "best_run": 11,
+       "best_where": "L11-L21",
+       "depth": 0.21428571428571427,
+       "free": 31,
+       "in_zone": false,
+       "row": "L"
+      },
+      {
+       "best_run": 11,
+       "best_where": "M11-M21",
+       "depth": 0.14285714285714285,
+       "free": 31,
+       "in_zone": false,
+       "row": "M"
+      }
+     ],
+     "best_run": 4,
+     "best_where": "F18-F21",
+     "cinema": "PVR Palazzo-The Nexus Vijaya Mall",
+     "experience": "IMAX",
+     "free": 288,
+     "free_outside_zone": 279,
+     "meets_party_size": true,
+     "party_size": 1,
+     "rows_seen": [
+      "O",
+      "N",
+      "M",
+      "L",
+      "K",
+      "J",
+      "I",
+      "H",
+      "G",
+      "F",
+      "E",
+      "D",
+      "C",
+      "B",
+      "A"
+     ],
+     "seats": [
+      "F18",
+      "F19",
+      "F20",
+      "F21",
+      "E18",
+      "E19",
+      "E20",
+      "E21",
+      "D19"
+     ],
+     "total": 442,
+     "when": "Sun, 16 Aug, 7:05 PM - 10:40 PM",
+     "zone_free": 9,
+     "zone_rows": [
+      "F",
+      "E",
+      "D",
+      "C"
+     ],
+     "zone_total": 44
+    },
+    "status": "Available",
+    "subtitle_language": "en",
+    "time": "07:05 PM",
+    "title": "THE ODYSSEY",
+    "token": "o3OwJodF74duX5zFgQBSdA==",
+    "ts": 1786887300000,
+    "variant_id": "37656"
+   },
+   "2026-08-16|09:10 AM|AUDI 5": {
+    "booking_url": "https://www.pvrcinemas.com/seatlayout/o3OwJodF74d5hMcYzWeYxw==",
+    "canonical_film_id": "35098",
+    "date": "2026-08-16",
+    "ends_ts": 1786864380000,
+    "experience": "imax",
+    "film": "THE ODYSSEY (ENGLISH IMAX WITH ENGLISH SUBTITLE)",
+    "format": "IMAX",
+    "formats": [
+     "IMAX"
+    ],
+    "language": "en",
+    "language_disputed": false,
+    "language_name": "English",
+    "language_source": "variant",
+    "screen": "AUDI 5",
+    "seats": {
+     "alternatives": [
+      {
+       "best_run": 10,
+       "best_where": "H22-H31",
+       "depth": 0.5,
+       "free": 27,
+       "in_zone": false,
+       "row": "H"
+      },
+      {
+       "best_run": 10,
+       "best_where": "I1-I10",
+       "depth": 0.42857142857142855,
+       "free": 30,
+       "in_zone": false,
+       "row": "I"
+      },
+      {
+       "best_run": 11,
+       "best_where": "J11-J21",
+       "depth": 0.35714285714285715,
+       "free": 31,
+       "in_zone": false,
+       "row": "J"
+      },
+      {
+       "best_run": 11,
+       "best_where": "K11-K21",
+       "depth": 0.2857142857142857,
+       "free": 31,
+       "in_zone": false,
+       "row": "K"
+      },
+      {
+       "best_run": 11,
+       "best_where": "L11-L21",
+       "depth": 0.21428571428571427,
+       "free": 31,
+       "in_zone": false,
+       "row": "L"
+      },
+      {
+       "best_run": 11,
+       "best_where": "M11-M21",
+       "depth": 0.14285714285714285,
+       "free": 31,
+       "in_zone": false,
+       "row": "M"
+      }
+     ],
+     "best_run": 5,
+     "best_where": "C14-C18",
+     "cinema": "PVR Palazzo-The Nexus Vijaya Mall",
+     "experience": "IMAX",
+     "free": 315,
+     "free_outside_zone": 297,
+     "meets_party_size": true,
+     "party_size": 1,
+     "rows_seen": [
+      "O",
+      "N",
+      "M",
+      "L",
+      "K",
+      "J",
+      "I",
+      "H",
+      "G",
+      "F",
+      "E",
+      "D",
+      "C",
+      "B",
+      "A"
+     ],
+     "seats": [
+      "F16",
+      "F17",
+      "F18",
+      "F19",
+      "F20",
+      "F21",
+      "E15",
+      "E16",
+      "E17",
+      "E18",
+      "E19",
+      "E20",
+      "E21",
+      "C14",
+      "C15",
+      "C16",
+      "C17",
+      "C18"
+     ],
+     "total": 442,
+     "when": "Sun, 16 Aug, 9:10 AM - 12:43 PM",
+     "zone_free": 18,
+     "zone_rows": [
+      "F",
+      "E",
+      "D",
+      "C"
+     ],
+     "zone_total": 44
+    },
+    "status": "Available",
+    "subtitle_language": "en",
+    "time": "09:10 AM",
+    "title": "THE ODYSSEY",
+    "token": "o3OwJodF74d5hMcYzWeYxw==",
+    "ts": 1786851600000,
+    "variant_id": "37656"
+   },
+   "2026-08-16|12:45 PM|AUDI 5": {
+    "booking_url": "https://www.pvrcinemas.com/seatlayout/o3OwJodF74fL2BztaHQt6Q==",
+    "canonical_film_id": "35098",
+    "date": "2026-08-16",
+    "ends_ts": 1786877280000,
+    "experience": "imax",
+    "film": "THE ODYSSEY (ENGLISH IMAX WITH ENGLISH SUBTITLE)",
+    "format": "IMAX",
+    "formats": [
+     "IMAX"
+    ],
+    "language": "en",
+    "language_disputed": false,
+    "language_name": "English",
+    "language_source": "variant",
+    "screen": "AUDI 5",
+    "seats": {
+     "alternatives": [
+      {
+       "best_run": 10,
+       "best_where": "H22-H31",
+       "depth": 0.5,
+       "free": 20,
+       "in_zone": false,
+       "row": "H"
+      },
+      {
+       "best_run": 10,
+       "best_where": "I1-I10",
+       "depth": 0.42857142857142855,
+       "free": 23,
+       "in_zone": false,
+       "row": "I"
+      },
+      {
+       "best_run": 11,
+       "best_where": "J11-J21",
+       "depth": 0.35714285714285715,
+       "free": 31,
+       "in_zone": false,
+       "row": "J"
+      },
+      {
+       "best_run": 10,
+       "best_where": "K1-K10",
+       "depth": 0.2857142857142857,
+       "free": 24,
+       "in_zone": false,
+       "row": "K"
+      },
+      {
+       "best_run": 11,
+       "best_where": "L11-L21",
+       "depth": 0.21428571428571427,
+       "free": 31,
+       "in_zone": false,
+       "row": "L"
+      },
+      {
+       "best_run": 11,
+       "best_where": "M11-M21",
+       "depth": 0.14285714285714285,
+       "free": 31,
+       "in_zone": false,
+       "row": "M"
+      }
+     ],
+     "best_run": 1,
+     "best_where": "E21",
+     "cinema": "PVR Palazzo-The Nexus Vijaya Mall",
+     "experience": "IMAX",
+     "free": 260,
+     "free_outside_zone": 259,
+     "meets_party_size": true,
+     "party_size": 1,
+     "rows_seen": [
+      "O",
+      "N",
+      "M",
+      "L",
+      "K",
+      "J",
+      "I",
+      "H",
+      "G",
+      "F",
+      "E",
+      "D",
+      "C",
+      "B",
+      "A"
+     ],
+     "seats": [
+      "E21"
+     ],
+     "total": 442,
+     "when": "Sun, 16 Aug, 12:45 PM - 4:18 PM",
+     "zone_free": 1,
+     "zone_rows": [
+      "F",
+      "E",
+      "D",
+      "C"
+     ],
+     "zone_total": 44
+    },
+    "status": "Available",
+    "subtitle_language": "en",
+    "time": "12:45 PM",
+    "title": "THE ODYSSEY",
+    "token": "o3OwJodF74fL2BztaHQt6Q==",
+    "ts": 1786864500000,
+    "variant_id": "37656"
+   }
+  }
+ },
  "The Odyssey - IMAX - Phoenix Velachery": {},
  "__heartbeat__": {
   "last_alert": null,
-  "last_success": "2026-08-12T05:26:58+05:30"
+  "last_success": "2026-08-12T08:06:02+05:30"
  }
 }
