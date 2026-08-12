@@ -31,7 +31,7 @@
        "best_run": 5,
        "best_where": "I27-I31",
        "depth": 0.42857142857142855,
-       "free": 8,
+       "free": 7,
        "in_zone": false,
        "row": "I"
       },
@@ -55,15 +55,15 @@
        "best_run": 10,
        "best_where": "L1-L10",
        "depth": 0.21428571428571427,
-       "free": 23,
+       "free": 21,
        "in_zone": false,
        "row": "L"
       },
       {
-       "best_run": 11,
-       "best_where": "M11-M21",
+       "best_run": 10,
+       "best_where": "M1-M10",
        "depth": 0.14285714285714285,
-       "free": 31,
+       "free": 28,
        "in_zone": false,
        "row": "M"
       }
@@ -72,8 +72,8 @@
      "best_where": "",
      "cinema": "PVR Palazzo-The Nexus Vijaya Mall",
      "experience": "IMAX",
-     "free": 146,
-     "free_outside_zone": 146,
+     "free": 140,
+     "free_outside_zone": 140,
      "meets_party_size": false,
      "party_size": 1,
      "rows_seen": [
@@ -135,23 +135,23 @@
        "best_run": 3,
        "best_where": "H1-H3",
        "depth": 0.5,
-       "free": 8,
+       "free": 6,
        "in_zone": false,
        "row": "H"
       },
       {
-       "best_run": 9,
-       "best_where": "I1-I9",
+       "best_run": 8,
+       "best_where": "I24-I31",
        "depth": 0.42857142857142855,
-       "free": 17,
+       "free": 10,
        "in_zone": false,
        "row": "I"
       },
       {
        "best_run": 10,
-       "best_where": "J1-J10",
+       "best_where": "J22-J31",
        "depth": 0.35714285714285715,
-       "free": 20,
+       "free": 18,
        "in_zone": false,
        "row": "J"
       },
@@ -167,7 +167,7 @@
        "best_run": 10,
        "best_where": "L1-L10",
        "depth": 0.21428571428571427,
-       "free": 27,
+       "free": 24,
        "in_zone": false,
        "row": "L"
       },
@@ -184,8 +184,8 @@
      "best_where": "",
      "cinema": "PVR Palazzo-The Nexus Vijaya Mall",
      "experience": "IMAX",
-     "free": 186,
-     "free_outside_zone": 186,
+     "free": 171,
+     "free_outside_zone": 171,
      "meets_party_size": false,
      "party_size": 1,
      "rows_seen": [
@@ -247,7 +247,7 @@
        "best_run": 1,
        "best_where": "H3",
        "depth": 0.5,
-       "free": 2,
+       "free": 1,
        "in_zone": false,
        "row": "H"
       },
@@ -263,23 +263,23 @@
        "best_run": 3,
        "best_where": "J1-J3",
        "depth": 0.35714285714285715,
-       "free": 7,
+       "free": 5,
        "in_zone": false,
        "row": "J"
       },
       {
-       "best_run": 9,
-       "best_where": "K1-K9",
+       "best_run": 5,
+       "best_where": "K1-K5",
        "depth": 0.2857142857142857,
-       "free": 17,
+       "free": 9,
        "in_zone": false,
        "row": "K"
       },
       {
-       "best_run": 10,
-       "best_where": "L1-L10",
+       "best_run": 8,
+       "best_where": "L24-L31",
        "depth": 0.21428571428571427,
-       "free": 17,
+       "free": 14,
        "in_zone": false,
        "row": "L"
       },
@@ -296,8 +296,8 @@
      "best_where": "",
      "cinema": "PVR Palazzo-The Nexus Vijaya Mall",
      "experience": "IMAX",
-     "free": 128,
-     "free_outside_zone": 128,
+     "free": 114,
+     "free_outside_zone": 114,
      "meets_party_size": false,
      "party_size": 1,
      "rows_seen": [
@@ -369,7 +369,7 @@
        "best_run": 8,
        "best_where": "I1-I8",
        "depth": 0.42857142857142855,
-       "free": 16,
+       "free": 12,
        "in_zone": false,
        "row": "I"
       },
@@ -383,17 +383,17 @@
       },
       {
        "best_run": 10,
-       "best_where": "K1-K10",
+       "best_where": "K22-K31",
        "depth": 0.2857142857142857,
-       "free": 22,
+       "free": 17,
        "in_zone": false,
        "row": "K"
       },
       {
-       "best_run": 11,
-       "best_where": "L11-L21",
+       "best_run": 10,
+       "best_where": "L1-L10",
        "depth": 0.21428571428571427,
-       "free": 31,
+       "free": 29,
        "in_zone": false,
        "row": "L"
       },
@@ -410,8 +410,8 @@
      "best_where": "",
      "cinema": "PVR Palazzo-The Nexus Vijaya Mall",
      "experience": "IMAX",
-     "free": 185,
-     "free_outside_zone": 185,
+     "free": 174,
+     "free_outside_zone": 174,
      "meets_party_size": false,
      "party_size": 1,
      "rows_seen": [
@@ -470,18 +470,18 @@
     "seats": {
      "alternatives": [
       {
-       "best_run": 5,
-       "best_where": "H5-H9",
+       "best_run": 3,
+       "best_where": "H1-H3",
        "depth": 0.5,
-       "free": 9,
+       "free": 6,
        "in_zone": false,
        "row": "H"
       },
       {
        "best_run": 10,
-       "best_where": "I1-I10",
+       "best_where": "I22-I31",
        "depth": 0.42857142857142855,
-       "free": 20,
+       "free": 19,
        "in_zone": false,
        "row": "I"
       },
@@ -522,8 +522,8 @@
      "best_where": "",
      "cinema": "PVR Palazzo-The Nexus Vijaya Mall",
      "experience": "IMAX",
-     "free": 196,
-     "free_outside_zone": 196,
+     "free": 189,
+     "free_outside_zone": 189,
      "meets_party_size": false,
      "party_size": 1,
      "rows_seen": [
@@ -583,17 +583,9 @@
      "alternatives": [
       {
        "best_run": 3,
-       "best_where": "H29-H31",
-       "depth": 0.5,
-       "free": 3,
-       "in_zone": false,
-       "row": "H"
-      },
-      {
-       "best_run": 3,
        "best_where": "I1-I3",
        "depth": 0.42857142857142855,
-       "free": 6,
+       "free": 4,
        "in_zone": false,
        "row": "I"
       },
@@ -628,14 +620,22 @@
        "free": 31,
        "in_zone": false,
        "row": "M"
+      },
+      {
+       "best_run": 11,
+       "best_where": "N11-N21",
+       "depth": 0.07142857142857142,
+       "free": 31,
+       "in_zone": false,
+       "row": "N"
       }
      ],
      "best_run": 0,
      "best_where": "",
      "cinema": "PVR Palazzo-The Nexus Vijaya Mall",
      "experience": "IMAX",
-     "free": 161,
-     "free_outside_zone": 161,
+     "free": 156,
+     "free_outside_zone": 156,
      "meets_party_size": false,
      "party_size": 1,
      "rows_seen": [
@@ -699,9 +699,9 @@
      "alternatives": [
       {
        "best_run": 2,
-       "best_where": "H1-H2",
+       "best_where": "H33-H34",
        "depth": 0.5333333333333333,
-       "free": 4,
+       "free": 3,
        "in_zone": false,
        "row": "H"
       },
@@ -709,7 +709,7 @@
        "best_run": 4,
        "best_where": "I1-I4",
        "depth": 0.4666666666666667,
-       "free": 8,
+       "free": 4,
        "in_zone": false,
        "row": "I"
       },
@@ -725,7 +725,7 @@
        "best_run": 2,
        "best_where": "K1-K2",
        "depth": 0.3333333333333333,
-       "free": 3,
+       "free": 2,
        "in_zone": false,
        "row": "K"
       },
@@ -733,15 +733,15 @@
        "best_run": 4,
        "best_where": "L27-L30",
        "depth": 0.26666666666666666,
-       "free": 8,
+       "free": 6,
        "in_zone": false,
        "row": "L"
       },
       {
-       "best_run": 16,
-       "best_where": "M9-M24",
+       "best_run": 8,
+       "best_where": "M9-M16",
        "depth": 0.2,
-       "free": 22,
+       "free": 21,
        "in_zone": false,
        "row": "M"
       }
@@ -750,8 +750,8 @@
      "best_where": "",
      "cinema": "INOX Luxe Phoenix Market City, Velachery  (formerly Jazz Cinemas)Chennai",
      "experience": "IMAX",
-     "free": 116,
-     "free_outside_zone": 116,
+     "free": 105,
+     "free_outside_zone": 105,
      "meets_party_size": false,
      "party_size": 1,
      "rows_seen": [
@@ -785,7 +785,7 @@
      ],
      "zone_total": 80
     },
-    "status": "Available",
+    "status": "Filling Up Fast",
     "subtitle_language": "en",
     "time": "03:00 PM",
     "title": "THE ODYSSEY",
@@ -812,10 +812,10 @@
     "seats": {
      "alternatives": [
       {
-       "best_run": 8,
-       "best_where": "H27-H34",
+       "best_run": 6,
+       "best_where": "H29-H34",
        "depth": 0.5333333333333333,
-       "free": 14,
+       "free": 9,
        "in_zone": false,
        "row": "H"
       },
@@ -831,7 +831,7 @@
        "best_run": 8,
        "best_where": "J27-J34",
        "depth": 0.4,
-       "free": 16,
+       "free": 18,
        "in_zone": false,
        "row": "J"
       },
@@ -839,15 +839,15 @@
        "best_run": 8,
        "best_where": "K27-K34",
        "depth": 0.3333333333333333,
-       "free": 23,
+       "free": 20,
        "in_zone": false,
        "row": "K"
       },
       {
-       "best_run": 7,
-       "best_where": "L9-L15",
+       "best_run": 4,
+       "best_where": "L27-L30",
        "depth": 0.26666666666666666,
-       "free": 20,
+       "free": 12,
        "in_zone": false,
        "row": "L"
       },
@@ -864,8 +864,8 @@
      "best_where": "",
      "cinema": "INOX Luxe Phoenix Market City, Velachery  (formerly Jazz Cinemas)Chennai",
      "experience": "IMAX",
-     "free": 199,
-     "free_outside_zone": 199,
+     "free": 175,
+     "free_outside_zone": 175,
      "meets_party_size": false,
      "party_size": 1,
      "rows_seen": [
@@ -945,7 +945,7 @@
        "best_run": 8,
        "best_where": "J27-J34",
        "depth": 0.4,
-       "free": 21,
+       "free": 18,
        "in_zone": false,
        "row": "J"
       },
@@ -953,7 +953,7 @@
        "best_run": 8,
        "best_where": "K27-K34",
        "depth": 0.3333333333333333,
-       "free": 24,
+       "free": 17,
        "in_zone": false,
        "row": "K"
       },
@@ -961,7 +961,7 @@
        "best_run": 7,
        "best_where": "L9-L15",
        "depth": 0.26666666666666666,
-       "free": 20,
+       "free": 18,
        "in_zone": false,
        "row": "L"
       },
@@ -978,8 +978,8 @@
      "best_where": "",
      "cinema": "INOX Luxe Phoenix Market City, Velachery  (formerly Jazz Cinemas)Chennai",
      "experience": "IMAX",
-     "free": 218,
-     "free_outside_zone": 218,
+     "free": 194,
+     "free_outside_zone": 194,
      "meets_party_size": false,
      "party_size": 1,
      "rows_seen": [
@@ -1042,26 +1042,26 @@
     "seats": {
      "alternatives": [
       {
-       "best_run": 6,
-       "best_where": "H29-H34",
+       "best_run": 2,
+       "best_where": "H33-H34",
        "depth": 0.5333333333333333,
-       "free": 10,
+       "free": 2,
        "in_zone": false,
        "row": "H"
       },
       {
-       "best_run": 6,
-       "best_where": "I1-I6",
+       "best_run": 4,
+       "best_where": "I31-I34",
        "depth": 0.4666666666666667,
-       "free": 11,
+       "free": 6,
        "in_zone": false,
        "row": "I"
       },
       {
-       "best_run": 8,
-       "best_where": "J27-J34",
+       "best_run": 6,
+       "best_where": "J1-J6",
        "depth": 0.4,
-       "free": 16,
+       "free": 13,
        "in_zone": false,
        "row": "J"
       },
@@ -1069,7 +1069,7 @@
        "best_run": 8,
        "best_where": "K27-K34",
        "depth": 0.3333333333333333,
-       "free": 20,
+       "free": 16,
        "in_zone": false,
        "row": "K"
       },
@@ -1094,8 +1094,8 @@
      "best_where": "",
      "cinema": "INOX Luxe Phoenix Market City, Velachery  (formerly Jazz Cinemas)Chennai",
      "experience": "IMAX",
-     "free": 163,
-     "free_outside_zone": 163,
+     "free": 141,
+     "free_outside_zone": 141,
      "meets_party_size": false,
      "party_size": 1,
      "rows_seen": [
@@ -1159,7 +1159,7 @@
        "best_run": 6,
        "best_where": "H1-H6",
        "depth": 0.5333333333333333,
-       "free": 14,
+       "free": 13,
        "in_zone": false,
        "row": "H"
       },
@@ -1167,7 +1167,7 @@
        "best_run": 8,
        "best_where": "I27-I34",
        "depth": 0.4666666666666667,
-       "free": 17,
+       "free": 15,
        "in_zone": false,
        "row": "I"
       },
@@ -1175,7 +1175,7 @@
        "best_run": 8,
        "best_where": "J27-J34",
        "depth": 0.4,
-       "free": 28,
+       "free": 24,
        "in_zone": false,
        "row": "J"
       },
@@ -1208,8 +1208,8 @@
      "best_where": "",
      "cinema": "INOX Luxe Phoenix Market City, Velachery  (formerly Jazz Cinemas)Chennai",
      "experience": "IMAX",
-     "free": 239,
-     "free_outside_zone": 239,
+     "free": 217,
+     "free_outside_zone": 217,
      "meets_party_size": false,
      "party_size": 1,
      "rows_seen": [
@@ -1273,7 +1273,7 @@
        "best_run": 8,
        "best_where": "H27-H34",
        "depth": 0.5333333333333333,
-       "free": 25,
+       "free": 21,
        "in_zone": false,
        "row": "H"
       },
@@ -1294,10 +1294,10 @@
        "row": "J"
       },
       {
-       "best_run": 16,
-       "best_where": "K9-K24",
+       "best_run": 8,
+       "best_where": "K27-K34",
        "depth": 0.3333333333333333,
-       "free": 30,
+       "free": 26,
        "in_zone": false,
        "row": "K"
       },
@@ -1318,13 +1318,13 @@
        "row": "M"
       }
      ],
-     "best_run": 2,
-     "best_where": "G23-G24",
+     "best_run": 0,
+     "best_where": "",
      "cinema": "INOX Luxe Phoenix Market City, Velachery  (formerly Jazz Cinemas)Chennai",
      "experience": "IMAX",
-     "free": 268,
-     "free_outside_zone": 264,
-     "meets_party_size": true,
+     "free": 254,
+     "free_outside_zone": 254,
+     "meets_party_size": false,
      "party_size": 1,
      "rows_seen": [
       "P",
@@ -1344,15 +1344,10 @@
       "B",
       "A"
      ],
-     "seats": [
-      "G23",
-      "G24",
-      "F23",
-      "F24"
-     ],
+     "seats": [],
      "total": 428,
      "when": "Sun, 16 Aug, 10:20 PM - 1:55 AM",
-     "zone_free": 4,
+     "zone_free": 0,
      "zone_rows": [
       "G",
       "F",
@@ -1374,6 +1369,6 @@
  },
  "__heartbeat__": {
   "last_alert": null,
-  "last_success": "2026-08-12T13:17:38+05:30"
+  "last_success": "2026-08-12T14:26:15+05:30"
  }
 }
