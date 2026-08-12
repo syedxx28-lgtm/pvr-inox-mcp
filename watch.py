@@ -403,6 +403,37 @@ def cadence(watch, snapshot, state, today):
     return COLD, "nothing due"
 
 
+def carry_ever_free(previous, snapshot):
+    """Accumulate, per show, the zone seats ever observed free.
+
+    PVR uses one code for sold and withheld alike, so the seat map cannot say
+    which is which. What it cannot hide is history: a seat that has never once
+    been free since we first saw the show was never on sale, and when it does
+    come free that is a RELEASE, not a cancellation. Those are the seats worth
+    waiting for, and the only way to know them is to have been watching.
+
+    Kept on the show rather than inside its seat report, so a cycle whose seat
+    read failed does not erase the history.
+    """
+    for date_str, shows in snapshot.items():
+        if not shows:
+            continue
+        prev_shows = previous.get(date_str) or {}
+        for key, show in shows.items():
+            was = set((prev_shows.get(key) or {}).get("ever_free") or [])
+            report = show.get("seats") or {}
+            show["ever_free"] = sorted(was | set(report.get("zone_free_labels") or []))
+
+
+def never_free(show):
+    """Zone seats that have never been observed free. () if not yet known."""
+    report = show.get("seats") or {}
+    roster = report.get("zone_labels")
+    if not roster:
+        return ()
+    return tuple(sorted(set(roster) - set(show.get("ever_free") or [])))
+
+
 def record_opened(state, watch, snapshot):
     """First time each date answered with shows. Ages the held-row watch."""
     book = state.setdefault(OPENED_KEY, {}).setdefault(watch["name"], {})
@@ -473,6 +504,25 @@ def diff(watch, previous, snapshot):
                     )
                     continue
 
+            # A zone seat coming free for the FIRST time since we started
+            # watching was never on sale to begin with - the house was holding
+            # it. That is a different event from a cancellation and a better one:
+            # releases come in blocks, cancellations come one seat at a time.
+            opened_up = sorted(
+                set((show.get("seats") or {}).get("zone_free_labels") or [])
+                - set(before.get("ever_free") or [])
+            )
+            if opened_up:
+                events.append(
+                    {
+                        "kind": "released",
+                        "date": date_str,
+                        "shows": [show],
+                        "seats": opened_up,
+                    }
+                )
+                continue
+
             # A show that frees up a seat in the zone is the case worth waking
             # for. Alert only when the best block crosses the threshold from
             # below, so a show sitting above it does not re-fire every run.
@@ -499,6 +549,7 @@ HEADLINES = {
     "new_show": "\U0001F195 Show added",
     "back_in_stock": "\u267B\uFE0F Back in stock",
     "seats_freed": "\U0001FA91 Good seats opened up",
+    "released": "\U0001F39F\uFE0F Withheld seats RELEASED",
 }
 
 
@@ -558,6 +609,16 @@ def format_alert(watch, events):
             # Two columns, so the times line up and the eye runs straight down
             # the seat column.
             lines.append("%-9s %s" % (s["time"], short_seats(s)))
+            if ev.get("seats"):
+                # Name them. These went on sale for the first time just now, so
+                # the seat numbers are the whole point of the message.
+                lines.append("%-9s just released: %s" % ("", ", ".join(ev["seats"][:12])))
+            held = never_free(s)
+            if held:
+                lines.append(
+                    "%-9s %d of %d zone seats still never seen free"
+                    % ("", len(held), len((s.get("seats") or {}).get("zone_labels") or []))
+                )
 
     # A window opening is not the same as your seats being buyable - PVR opens a
     # date with rows withheld. Saying "booking opened" and stopping there sends
@@ -570,7 +631,7 @@ def format_alert(watch, events):
 
     # Anything that needs you to act now goes at max priority, so it breaks
     # through Do Not Disturb. An extra show on an already-open date does not.
-    urgent = {"new_date", "seats_freed"}
+    urgent = {"new_date", "seats_freed", "released"}
     priority = 5 if any(e["kind"] in urgent for e in events) else 4
 
     return title, "\n".join(lines), url, priority
@@ -622,6 +683,7 @@ def stream(config, state, args, state_path):
                 print("  paused: %s" % exc, file=sys.stderr)
                 continue
             previous = state.get(watch["name"], {})
+            carry_ever_free(previous, snapshot)
             if previous:
                 for ev in diff(watch, previous, snapshot):
                     when = datetime.date.fromisoformat(ev["date"]).strftime("%a %-d %b")
@@ -699,6 +761,9 @@ def run_once(config, state, args, state_path, mode_hint=None):
         # Before diffing: a date that opened starts its held-row clock now, and
         # the cadence has to be decided even if an alert later fails to send.
         record_opened(state, watch, snapshot)
+        # Must precede the diff: the diff reads the PREVIOUS run's ever_free,
+        # and this is what writes the current one forward.
+        carry_ever_free(previous, snapshot)
         mode, reason = cadence(watch, snapshot, state, today)
         modes.append((mode, "%s - %s" % (watch["name"], reason)))
         print("  cadence: %s - %s" % (mode, reason))

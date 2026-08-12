@@ -1050,6 +1050,11 @@ def seat_report(token, zone_rows=None, zone_seats=None, want_map=False, party_si
 
     total = free = zone_total = zone_free = zone_held = 0
     zone_names = []
+    # Every seat in the zone, free or not. A caller tracking which seats have
+    # EVER been free needs the roster, not just today's survivors: PVR marks a
+    # withheld seat with the same code as a sold one (only 1 and 2 are ever
+    # seen), so "never once free" is the only way to tell the two apart.
+    zone_labels = []
     best_run, best_where = 0, ""
     picture = []
     # Every distinct `s` value seen. Only 1 (free) and 2 (taken) are confirmed;
@@ -1086,6 +1091,7 @@ def seat_report(token, zone_rows=None, zone_seats=None, want_map=False, party_si
                 continue
 
             zone_total += 1
+            zone_labels.append(label)
             glyphs += "O" if is_free else "x"
             if is_free:
                 zone_free += 1
@@ -1147,6 +1153,10 @@ def seat_report(token, zone_rows=None, zone_seats=None, want_map=False, party_si
         "best_run": best_run,
         "best_where": best_where,
         "seats": zone_names[:60],
+        # Uncapped, for callers that compare seat sets across runs rather than
+        # print them. `seats` stays truncated because it is for display.
+        "zone_free_labels": zone_names,
+        "zone_labels": zone_labels,
         "zone_rows": [r for r in zone if zone[r]],
         "rows_seen": [r.get("n") for r in seat_rows],
         "party_size": party_size,
