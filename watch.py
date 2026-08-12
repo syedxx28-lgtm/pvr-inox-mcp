@@ -319,6 +319,10 @@ COLD, NEAR_OPEN, HELD = "cold", "near_open", "held"
 OPEN_LEAD_DAYS = int(os.environ.get("PVR_OPEN_LEAD_DAYS", "6"))
 # How long after a date opens its withheld rows stay worth watching for.
 HOLD_WATCH_HOURS = float(os.environ.get("PVR_HOLD_WATCH_HOURS", "48"))
+# ...except close to the show itself, where the thing being waited for is no
+# longer a withheld row but a cancellation, and a date this near is worth
+# chasing however long it has been on sale.
+CHASE_DAYS = int(os.environ.get("PVR_CHASE_DAYS", "4"))
 # Seconds between polls while holding a run open.
 INTERVALS = {
     # Schedule only - one call per date, so this can be frequent cheaply.
@@ -360,13 +364,16 @@ def cadence(watch, snapshot, state, today):
 
     for date_str in sorted(d for d, v in snapshot.items() if v):
         first = opened.get(date_str)
-        if first:
+        days_out = (datetime.date.fromisoformat(date_str) - today).days
+        if first and days_out > CHASE_DAYS:
             age_h = (
                 now - datetime.datetime.fromisoformat(first)
             ).total_seconds() / 3600.0
             if age_h > HOLD_WATCH_HOURS:
-                # Long open and still short - that is a sold-out show, not a
-                # held one. Restocks are the ordinary cron's job.
+                # Long open, still short, and not for a while yet - that is a
+                # sold-out show rather than a held one, and chasing it would
+                # hold a run open every hour for weeks. The ordinary cron still
+                # polls it; it just stops getting the fast cadence.
                 continue
 
         rated = [s for s in snapshot[date_str].values() if s.get("seats")]
