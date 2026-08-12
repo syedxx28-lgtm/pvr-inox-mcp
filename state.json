@@ -20,26 +20,26 @@
     "seats": {
      "alternatives": [
       {
-       "best_run": 10,
-       "best_where": "H22-H31",
+       "best_run": 5,
+       "best_where": "H27-H31",
        "depth": 0.5,
-       "free": 17,
+       "free": 10,
        "in_zone": false,
        "row": "H"
       },
       {
-       "best_run": 10,
-       "best_where": "I22-I31",
+       "best_run": 8,
+       "best_where": "I1-I8",
        "depth": 0.42857142857142855,
-       "free": 18,
+       "free": 13,
        "in_zone": false,
        "row": "I"
       },
       {
        "best_run": 10,
-       "best_where": "J1-J10",
+       "best_where": "J22-J31",
        "depth": 0.35714285714285715,
-       "free": 22,
+       "free": 19,
        "in_zone": false,
        "row": "J"
       },
@@ -47,7 +47,7 @@
        "best_run": 10,
        "best_where": "K1-K10",
        "depth": 0.2857142857142857,
-       "free": 28,
+       "free": 21,
        "in_zone": false,
        "row": "K"
       },
@@ -68,13 +68,13 @@
        "row": "M"
       }
      ],
-     "best_run": 1,
-     "best_where": "F21",
+     "best_run": 0,
+     "best_where": "",
      "cinema": "PVR Palazzo-The Nexus Vijaya Mall",
      "experience": "IMAX",
-     "free": 233,
-     "free_outside_zone": 232,
-     "meets_party_size": true,
+     "free": 190,
+     "free_outside_zone": 190,
+     "meets_party_size": false,
      "party_size": 1,
      "rows_seen": [
       "O",
@@ -93,12 +93,10 @@
       "B",
       "A"
      ],
-     "seats": [
-      "F21"
-     ],
+     "seats": [],
      "total": 442,
      "when": "Sat, 15 Aug, 7:05 PM - 10:40 PM",
-     "zone_free": 1,
+     "zone_free": 0,
      "zone_rows": [
       "F",
       "E",
@@ -134,10 +132,10 @@
     "seats": {
      "alternatives": [
       {
-       "best_run": 10,
-       "best_where": "H22-H31",
+       "best_run": 8,
+       "best_where": "H24-H31",
        "depth": 0.5,
-       "free": 19,
+       "free": 17,
        "in_zone": false,
        "row": "H"
       },
@@ -145,7 +143,7 @@
        "best_run": 10,
        "best_where": "I1-I10",
        "depth": 0.42857142857142855,
-       "free": 27,
+       "free": 18,
        "in_zone": false,
        "row": "I"
       },
@@ -153,23 +151,23 @@
        "best_run": 10,
        "best_where": "J1-J10",
        "depth": 0.35714285714285715,
-       "free": 28,
+       "free": 22,
        "in_zone": false,
        "row": "J"
       },
       {
-       "best_run": 11,
-       "best_where": "K11-K21",
+       "best_run": 10,
+       "best_where": "K1-K10",
        "depth": 0.2857142857142857,
-       "free": 31,
+       "free": 27,
        "in_zone": false,
        "row": "K"
       },
       {
-       "best_run": 11,
-       "best_where": "L11-L21",
+       "best_run": 10,
+       "best_where": "L1-L10",
        "depth": 0.21428571428571427,
-       "free": 31,
+       "free": 29,
        "in_zone": false,
        "row": "L"
       },
@@ -182,12 +180,12 @@
        "row": "M"
       }
      ],
-     "best_run": 4,
-     "best_where": "F18-F21",
+     "best_run": 1,
+     "best_where": "F21",
      "cinema": "PVR Palazzo-The Nexus Vijaya Mall",
      "experience": "IMAX",
-     "free": 286,
-     "free_outside_zone": 277,
+     "free": 232,
+     "free_outside_zone": 231,
      "meets_party_size": true,
      "party_size": 1,
      "rows_seen": [
@@ -208,19 +206,11 @@
       "A"
      ],
      "seats": [
-      "F18",
-      "F19",
-      "F20",
-      "F21",
-      "E17",
-      "E18",
-      "E19",
-      "E20",
-      "E21"
+      "F21"
      ],
      "total": 442,
      "when": "Sat, 15 Aug, 9:10 AM - 12:43 PM",
-     "zone_free": 9,
+     "zone_free": 1,
      "zone_rows": [
       "F",
       "E",
@@ -256,26 +246,26 @@
     "seats": {
      "alternatives": [
       {
-       "best_run": 10,
-       "best_where": "H22-H31",
+       "best_run": 3,
+       "best_where": "H1-H3",
        "depth": 0.5,
-       "free": 19,
+       "free": 5,
        "in_zone": false,
        "row": "H"
       },
       {
-       "best_run": 10,
-       "best_where": "I1-I10",
+       "best_run": 8,
+       "best_where": "I1-I8",
        "depth": 0.42857142857142855,
-       "free": 21,
+       "free": 15,
        "in_zone": false,
        "row": "I"
       },
       {
-       "best_run": 10,
-       "best_where": "J1-J10",
+       "best_run": 9,
+       "best_where": "J1-J9",
        "depth": 0.35714285714285715,
-       "free": 23,
+       "free": 16,
        "in_zone": false,
        "row": "J"
       },
@@ -283,15 +273,15 @@
        "best_run": 10,
        "best_where": "K1-K10",
        "depth": 0.2857142857142857,
-       "free": 27,
+       "free": 20,
        "in_zone": false,
        "row": "K"
       },
       {
-       "best_run": 11,
-       "best_where": "L11-L21",
+       "best_run": 10,
+       "best_where": "L1-L10",
        "depth": 0.21428571428571427,
-       "free": 31,
+       "free": 27,
        "in_zone": false,
        "row": "L"
       },
@@ -304,13 +294,13 @@
        "row": "M"
       }
      ],
-     "best_run": 1,
-     "best_where": "F21",
+     "best_run": 0,
+     "best_where": "",
      "cinema": "PVR Palazzo-The Nexus Vijaya Mall",
      "experience": "IMAX",
-     "free": 244,
-     "free_outside_zone": 243,
-     "meets_party_size": true,
+     "free": 174,
+     "free_outside_zone": 174,
+     "meets_party_size": false,
      "party_size": 1,
      "rows_seen": [
       "O",
@@ -329,12 +319,10 @@
       "B",
       "A"
      ],
-     "seats": [
-      "F21"
-     ],
+     "seats": [],
      "total": 442,
      "when": "Sat, 15 Aug, 12:45 PM - 4:18 PM",
-     "zone_free": 1,
+     "zone_free": 0,
      "zone_rows": [
       "F",
       "E",
@@ -372,10 +360,10 @@
     "seats": {
      "alternatives": [
       {
-       "best_run": 10,
-       "best_where": "H22-H31",
+       "best_run": 7,
+       "best_where": "H25-H31",
        "depth": 0.5,
-       "free": 23,
+       "free": 13,
        "in_zone": false,
        "row": "H"
       },
@@ -383,23 +371,23 @@
        "best_run": 10,
        "best_where": "I1-I10",
        "depth": 0.42857142857142855,
-       "free": 24,
+       "free": 20,
        "in_zone": false,
        "row": "I"
       },
       {
-       "best_run": 11,
-       "best_where": "J11-J21",
+       "best_run": 10,
+       "best_where": "J1-J10",
        "depth": 0.35714285714285715,
-       "free": 31,
+       "free": 23,
        "in_zone": false,
        "row": "J"
       },
       {
-       "best_run": 11,
-       "best_where": "K11-K21",
+       "best_run": 10,
+       "best_where": "K1-K10",
        "depth": 0.2857142857142857,
-       "free": 31,
+       "free": 25,
        "in_zone": false,
        "row": "K"
       },
@@ -420,13 +408,13 @@
        "row": "M"
       }
      ],
-     "best_run": 4,
-     "best_where": "F18-F21",
+     "best_run": 0,
+     "best_where": "",
      "cinema": "PVR Palazzo-The Nexus Vijaya Mall",
      "experience": "IMAX",
-     "free": 288,
-     "free_outside_zone": 279,
-     "meets_party_size": true,
+     "free": 218,
+     "free_outside_zone": 218,
+     "meets_party_size": false,
      "party_size": 1,
      "rows_seen": [
       "O",
@@ -445,20 +433,10 @@
       "B",
       "A"
      ],
-     "seats": [
-      "F18",
-      "F19",
-      "F20",
-      "F21",
-      "E18",
-      "E19",
-      "E20",
-      "E21",
-      "D19"
-     ],
+     "seats": [],
      "total": 442,
      "when": "Sun, 16 Aug, 7:05 PM - 10:40 PM",
-     "zone_free": 9,
+     "zone_free": 0,
      "zone_rows": [
       "F",
       "E",
@@ -497,7 +475,7 @@
        "best_run": 10,
        "best_where": "H22-H31",
        "depth": 0.5,
-       "free": 27,
+       "free": 19,
        "in_zone": false,
        "row": "H"
       },
@@ -505,23 +483,23 @@
        "best_run": 10,
        "best_where": "I1-I10",
        "depth": 0.42857142857142855,
-       "free": 30,
+       "free": 20,
        "in_zone": false,
        "row": "I"
       },
       {
-       "best_run": 11,
-       "best_where": "J11-J21",
+       "best_run": 10,
+       "best_where": "J1-J10",
        "depth": 0.35714285714285715,
-       "free": 31,
+       "free": 28,
        "in_zone": false,
        "row": "J"
       },
       {
-       "best_run": 11,
-       "best_where": "K11-K21",
+       "best_run": 10,
+       "best_where": "K1-K10",
        "depth": 0.2857142857142857,
-       "free": 31,
+       "free": 30,
        "in_zone": false,
        "row": "K"
       },
@@ -542,12 +520,12 @@
        "row": "M"
       }
      ],
-     "best_run": 5,
-     "best_where": "C14-C18",
+     "best_run": 3,
+     "best_where": "E19-E21",
      "cinema": "PVR Palazzo-The Nexus Vijaya Mall",
      "experience": "IMAX",
-     "free": 315,
-     "free_outside_zone": 297,
+     "free": 257,
+     "free_outside_zone": 252,
      "meets_party_size": true,
      "party_size": 1,
      "rows_seen": [
@@ -568,28 +546,15 @@
       "A"
      ],
      "seats": [
-      "F16",
-      "F17",
-      "F18",
-      "F19",
       "F20",
       "F21",
-      "E15",
-      "E16",
-      "E17",
-      "E18",
       "E19",
       "E20",
-      "E21",
-      "C14",
-      "C15",
-      "C16",
-      "C17",
-      "C18"
+      "E21"
      ],
      "total": 442,
      "when": "Sun, 16 Aug, 9:10 AM - 12:43 PM",
-     "zone_free": 18,
+     "zone_free": 5,
      "zone_rows": [
       "F",
       "E",
@@ -625,26 +590,26 @@
     "seats": {
      "alternatives": [
       {
-       "best_run": 10,
-       "best_where": "H22-H31",
+       "best_run": 5,
+       "best_where": "H27-H31",
        "depth": 0.5,
-       "free": 20,
+       "free": 8,
        "in_zone": false,
        "row": "H"
       },
       {
-       "best_run": 10,
-       "best_where": "I1-I10",
+       "best_run": 8,
+       "best_where": "I24-I31",
        "depth": 0.42857142857142855,
-       "free": 23,
+       "free": 15,
        "in_zone": false,
        "row": "I"
       },
       {
-       "best_run": 11,
-       "best_where": "J11-J21",
+       "best_run": 10,
+       "best_where": "J1-J10",
        "depth": 0.35714285714285715,
-       "free": 31,
+       "free": 21,
        "in_zone": false,
        "row": "J"
       },
@@ -652,7 +617,7 @@
        "best_run": 10,
        "best_where": "K1-K10",
        "depth": 0.2857142857142857,
-       "free": 24,
+       "free": 22,
        "in_zone": false,
        "row": "K"
       },
@@ -673,13 +638,13 @@
        "row": "M"
       }
      ],
-     "best_run": 1,
-     "best_where": "E21",
+     "best_run": 0,
+     "best_where": "",
      "cinema": "PVR Palazzo-The Nexus Vijaya Mall",
      "experience": "IMAX",
-     "free": 260,
-     "free_outside_zone": 259,
-     "meets_party_size": true,
+     "free": 197,
+     "free_outside_zone": 197,
+     "meets_party_size": false,
      "party_size": 1,
      "rows_seen": [
       "O",
@@ -698,12 +663,10 @@
       "B",
       "A"
      ],
-     "seats": [
-      "E21"
-     ],
+     "seats": [],
      "total": 442,
      "when": "Sun, 16 Aug, 12:45 PM - 4:18 PM",
-     "zone_free": 1,
+     "zone_free": 0,
      "zone_rows": [
       "F",
       "E",
@@ -725,6 +688,6 @@
  "The Odyssey - IMAX - Phoenix Velachery": {},
  "__heartbeat__": {
   "last_alert": null,
-  "last_success": "2026-08-12T08:06:02+05:30"
+  "last_success": "2026-08-12T09:56:56+05:30"
  }
 }
