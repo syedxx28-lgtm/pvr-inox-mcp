@@ -14,7 +14,6 @@
    "language": "English",
    "horizon_days": 16,
    "weekdays": [
-    "Sat",
     "Sun"
    ],
    "alert_on_restock": true,
@@ -31,11 +30,15 @@
    ],
    "min_adjacent": 2,
    "min_lead_minutes": 90,
-   "party_size": 2
+   "party_size": 2,
+   "time_between": [
+    "11:00",
+    "15:00"
+   ]
   },
   {
    "name": "The Odyssey - IMAX - Phoenix Velachery",
-   "enabled": true,
+   "enabled": false,
    "provider": "pvr",
    "city": "Chennai",
    "cinema_id": "320",

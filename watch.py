@@ -76,6 +76,26 @@ PROVIDERS = {"pvr": (pvr_fetch_day, pvr_booking_url)}
 # --------------------------------------------------------------------------
 
 
+def clock(text, fmt="%I:%M %p"):
+    """'12:45 PM' -> 765, minutes since midnight. None if it will not parse."""
+    try:
+        when = datetime.datetime.strptime((text or "").strip().upper(), fmt)
+    except (ValueError, AttributeError):
+        return None
+    return when.hour * 60 + when.minute
+
+
+def in_window(show, window):
+    """Is this show inside a ["11:00", "15:00"] style window? 24h, inclusive."""
+    start, end = clock(window[0], "%H:%M"), clock(window[1], "%H:%M")
+    at = clock(show.get("time"))
+    if start is None or end is None or at is None:
+        return True  # an unparseable window must not silently hide every show
+    if end < start:
+        return at >= start or at <= end  # wraps midnight, e.g. a 10:20 PM show
+    return start <= at <= end
+
+
 def matches(show, watch):
     """Does this show satisfy the watch's film / experience / language filters?"""
     needle = watch.get("film_contains", "").upper()
@@ -92,6 +112,13 @@ def matches(show, watch):
         wanted = core.lang_code(want_lang) or str(want_lang).lower()
         if (show.get("language") or "") != wanted:
             return False
+
+    # Time of day, as a window rather than an exact time: the same show shifts by
+    # a few minutes between weeks, and a future date's schedule is not knowable
+    # when the watch is written.
+    window = watch.get("time_between")
+    if window and not in_window(show, window):
+        return False
 
     return True
 
