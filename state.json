@@ -20,26 +20,26 @@
     "seats": {
      "alternatives": [
       {
-       "best_run": 5,
-       "best_where": "H27-H31",
+       "best_run": 3,
+       "best_where": "H29-H31",
        "depth": 0.5,
-       "free": 10,
+       "free": 4,
        "in_zone": false,
        "row": "H"
       },
       {
-       "best_run": 8,
-       "best_where": "I1-I8",
+       "best_run": 6,
+       "best_where": "I1-I6",
        "depth": 0.42857142857142855,
-       "free": 13,
+       "free": 11,
        "in_zone": false,
        "row": "I"
       },
       {
-       "best_run": 10,
-       "best_where": "J22-J31",
+       "best_run": 9,
+       "best_where": "J1-J9",
        "depth": 0.35714285714285715,
-       "free": 19,
+       "free": 13,
        "in_zone": false,
        "row": "J"
       },
@@ -47,15 +47,15 @@
        "best_run": 10,
        "best_where": "K1-K10",
        "depth": 0.2857142857142857,
-       "free": 21,
+       "free": 20,
        "in_zone": false,
        "row": "K"
       },
       {
-       "best_run": 11,
-       "best_where": "L11-L21",
+       "best_run": 10,
+       "best_where": "L1-L10",
        "depth": 0.21428571428571427,
-       "free": 31,
+       "free": 27,
        "in_zone": false,
        "row": "L"
       },
@@ -72,8 +72,8 @@
      "best_where": "",
      "cinema": "PVR Palazzo-The Nexus Vijaya Mall",
      "experience": "IMAX",
-     "free": 190,
-     "free_outside_zone": 190,
+     "free": 166,
+     "free_outside_zone": 166,
      "meets_party_size": false,
      "party_size": 1,
      "rows_seen": [
@@ -135,7 +135,7 @@
        "best_run": 8,
        "best_where": "H24-H31",
        "depth": 0.5,
-       "free": 17,
+       "free": 16,
        "in_zone": false,
        "row": "H"
       },
@@ -151,7 +151,7 @@
        "best_run": 10,
        "best_where": "J1-J10",
        "depth": 0.35714285714285715,
-       "free": 22,
+       "free": 20,
        "in_zone": false,
        "row": "J"
       },
@@ -159,15 +159,15 @@
        "best_run": 10,
        "best_where": "K1-K10",
        "depth": 0.2857142857142857,
-       "free": 27,
+       "free": 23,
        "in_zone": false,
        "row": "K"
       },
       {
-       "best_run": 10,
-       "best_where": "L1-L10",
+       "best_run": 11,
+       "best_where": "L11-L21",
        "depth": 0.21428571428571427,
-       "free": 29,
+       "free": 31,
        "in_zone": false,
        "row": "L"
       },
@@ -180,13 +180,13 @@
        "row": "M"
       }
      ],
-     "best_run": 1,
-     "best_where": "F21",
+     "best_run": 0,
+     "best_where": "",
      "cinema": "PVR Palazzo-The Nexus Vijaya Mall",
      "experience": "IMAX",
-     "free": 232,
-     "free_outside_zone": 231,
-     "meets_party_size": true,
+     "free": 211,
+     "free_outside_zone": 211,
+     "meets_party_size": false,
      "party_size": 1,
      "rows_seen": [
       "O",
@@ -205,12 +205,10 @@
       "B",
       "A"
      ],
-     "seats": [
-      "F21"
-     ],
+     "seats": [],
      "total": 442,
      "when": "Sat, 15 Aug, 9:10 AM - 12:43 PM",
-     "zone_free": 1,
+     "zone_free": 0,
      "zone_rows": [
       "F",
       "E",
@@ -246,34 +244,34 @@
     "seats": {
      "alternatives": [
       {
-       "best_run": 3,
-       "best_where": "H1-H3",
+       "best_run": 2,
+       "best_where": "H30-H31",
        "depth": 0.5,
-       "free": 5,
+       "free": 3,
        "in_zone": false,
        "row": "H"
       },
       {
-       "best_run": 8,
-       "best_where": "I1-I8",
+       "best_run": 4,
+       "best_where": "I1-I4",
        "depth": 0.42857142857142855,
-       "free": 15,
+       "free": 8,
        "in_zone": false,
        "row": "I"
       },
       {
-       "best_run": 9,
-       "best_where": "J1-J9",
+       "best_run": 8,
+       "best_where": "J1-J8",
        "depth": 0.35714285714285715,
-       "free": 16,
+       "free": 15,
        "in_zone": false,
        "row": "J"
       },
       {
-       "best_run": 10,
-       "best_where": "K1-K10",
+       "best_run": 9,
+       "best_where": "K1-K9",
        "depth": 0.2857142857142857,
-       "free": 20,
+       "free": 16,
        "in_zone": false,
        "row": "K"
       },
@@ -281,15 +279,15 @@
        "best_run": 10,
        "best_where": "L1-L10",
        "depth": 0.21428571428571427,
-       "free": 27,
+       "free": 21,
        "in_zone": false,
        "row": "L"
       },
       {
-       "best_run": 11,
-       "best_where": "M11-M21",
+       "best_run": 10,
+       "best_where": "M1-M10",
        "depth": 0.14285714285714285,
-       "free": 31,
+       "free": 28,
        "in_zone": false,
        "row": "M"
       }
@@ -298,8 +296,8 @@
      "best_where": "",
      "cinema": "PVR Palazzo-The Nexus Vijaya Mall",
      "experience": "IMAX",
-     "free": 174,
-     "free_outside_zone": 174,
+     "free": 151,
+     "free_outside_zone": 151,
      "meets_party_size": false,
      "party_size": 1,
      "rows_seen": [
@@ -360,18 +358,18 @@
     "seats": {
      "alternatives": [
       {
-       "best_run": 7,
-       "best_where": "H25-H31",
+       "best_run": 5,
+       "best_where": "H27-H31",
        "depth": 0.5,
-       "free": 13,
+       "free": 10,
        "in_zone": false,
        "row": "H"
       },
       {
        "best_run": 10,
-       "best_where": "I1-I10",
+       "best_where": "I22-I31",
        "depth": 0.42857142857142855,
-       "free": 20,
+       "free": 18,
        "in_zone": false,
        "row": "I"
       },
@@ -379,7 +377,7 @@
        "best_run": 10,
        "best_where": "J1-J10",
        "depth": 0.35714285714285715,
-       "free": 23,
+       "free": 20,
        "in_zone": false,
        "row": "J"
       },
@@ -387,7 +385,7 @@
        "best_run": 10,
        "best_where": "K1-K10",
        "depth": 0.2857142857142857,
-       "free": 25,
+       "free": 22,
        "in_zone": false,
        "row": "K"
       },
@@ -412,8 +410,8 @@
      "best_where": "",
      "cinema": "PVR Palazzo-The Nexus Vijaya Mall",
      "experience": "IMAX",
-     "free": 218,
-     "free_outside_zone": 218,
+     "free": 195,
+     "free_outside_zone": 195,
      "meets_party_size": false,
      "party_size": 1,
      "rows_seen": [
@@ -472,10 +470,10 @@
     "seats": {
      "alternatives": [
       {
-       "best_run": 10,
-       "best_where": "H22-H31",
+       "best_run": 3,
+       "best_where": "H1-H3",
        "depth": 0.5,
-       "free": 19,
+       "free": 7,
        "in_zone": false,
        "row": "H"
       },
@@ -491,7 +489,7 @@
        "best_run": 10,
        "best_where": "J1-J10",
        "depth": 0.35714285714285715,
-       "free": 28,
+       "free": 22,
        "in_zone": false,
        "row": "J"
       },
@@ -499,7 +497,7 @@
        "best_run": 10,
        "best_where": "K1-K10",
        "depth": 0.2857142857142857,
-       "free": 30,
+       "free": 24,
        "in_zone": false,
        "row": "K"
       },
@@ -520,12 +518,12 @@
        "row": "M"
       }
      ],
-     "best_run": 3,
-     "best_where": "E19-E21",
+     "best_run": 1,
+     "best_where": "F21",
      "cinema": "PVR Palazzo-The Nexus Vijaya Mall",
      "experience": "IMAX",
-     "free": 257,
-     "free_outside_zone": 252,
+     "free": 207,
+     "free_outside_zone": 206,
      "meets_party_size": true,
      "party_size": 1,
      "rows_seen": [
@@ -546,15 +544,11 @@
       "A"
      ],
      "seats": [
-      "F20",
-      "F21",
-      "E19",
-      "E20",
-      "E21"
+      "F21"
      ],
      "total": 442,
      "when": "Sun, 16 Aug, 9:10 AM - 12:43 PM",
-     "zone_free": 5,
+     "zone_free": 1,
      "zone_rows": [
       "F",
       "E",
@@ -590,26 +584,26 @@
     "seats": {
      "alternatives": [
       {
-       "best_run": 5,
-       "best_where": "H27-H31",
+       "best_run": 3,
+       "best_where": "H29-H31",
        "depth": 0.5,
-       "free": 8,
+       "free": 3,
        "in_zone": false,
        "row": "H"
       },
       {
-       "best_run": 8,
-       "best_where": "I24-I31",
+       "best_run": 6,
+       "best_where": "I26-I31",
        "depth": 0.42857142857142855,
-       "free": 15,
+       "free": 11,
        "in_zone": false,
        "row": "I"
       },
       {
-       "best_run": 10,
-       "best_where": "J1-J10",
+       "best_run": 8,
+       "best_where": "J24-J31",
        "depth": 0.35714285714285715,
-       "free": 21,
+       "free": 13,
        "in_zone": false,
        "row": "J"
       },
@@ -617,7 +611,7 @@
        "best_run": 10,
        "best_where": "K1-K10",
        "depth": 0.2857142857142857,
-       "free": 22,
+       "free": 20,
        "in_zone": false,
        "row": "K"
       },
@@ -642,8 +636,8 @@
      "best_where": "",
      "cinema": "PVR Palazzo-The Nexus Vijaya Mall",
      "experience": "IMAX",
-     "free": 197,
-     "free_outside_zone": 197,
+     "free": 171,
+     "free_outside_zone": 171,
      "meets_party_size": false,
      "party_size": 1,
      "rows_seen": [
@@ -685,9 +679,750 @@
    }
   }
  },
- "The Odyssey - IMAX - Phoenix Velachery": {},
+ "The Odyssey - IMAX - Phoenix Velachery": {
+  "2026-08-15": {
+   "2026-08-15|03:00 PM|SCREEN 1": {
+    "booking_url": "https://www.pvrcinemas.com/seatlayout/thuODeBMwL9hWeipq0T9CA==",
+    "canonical_film_id": "35098",
+    "date": "2026-08-15",
+    "ends_ts": 1786799100000,
+    "experience": "imax",
+    "film": "THE ODYSSEY (ENGLISH IMAX WITH ENGLISH SUBTITLE)",
+    "format": "IMAX",
+    "formats": [
+     "IMAX"
+    ],
+    "language": "en",
+    "language_disputed": false,
+    "language_name": "English",
+    "language_source": "variant",
+    "screen": "SCREEN 1",
+    "seats": {
+     "alternatives": [
+      {
+       "best_run": 8,
+       "best_where": "H27-H34",
+       "depth": 0.5333333333333333,
+       "free": 14,
+       "in_zone": false,
+       "row": "H"
+      },
+      {
+       "best_run": 8,
+       "best_where": "I27-I34",
+       "depth": 0.4666666666666667,
+       "free": 16,
+       "in_zone": false,
+       "row": "I"
+      },
+      {
+       "best_run": 8,
+       "best_where": "J27-J34",
+       "depth": 0.4,
+       "free": 15,
+       "in_zone": false,
+       "row": "J"
+      },
+      {
+       "best_run": 8,
+       "best_where": "K27-K34",
+       "depth": 0.3333333333333333,
+       "free": 24,
+       "in_zone": false,
+       "row": "K"
+      },
+      {
+       "best_run": 16,
+       "best_where": "L9-L24",
+       "depth": 0.26666666666666666,
+       "free": 22,
+       "in_zone": false,
+       "row": "L"
+      },
+      {
+       "best_run": 16,
+       "best_where": "M9-M24",
+       "depth": 0.2,
+       "free": 22,
+       "in_zone": false,
+       "row": "M"
+      }
+     ],
+     "best_run": 0,
+     "best_where": "",
+     "cinema": "INOX Luxe Phoenix Market City, Velachery  (formerly Jazz Cinemas)Chennai",
+     "experience": "IMAX",
+     "free": 197,
+     "free_outside_zone": 197,
+     "meets_party_size": false,
+     "party_size": 1,
+     "rows_seen": [
+      "P",
+      "O",
+      "N",
+      "M",
+      "L",
+      "K",
+      "J",
+      "I",
+      "H",
+      "G",
+      "F",
+      "E",
+      "D",
+      "C",
+      "B",
+      "A"
+     ],
+     "seats": [],
+     "total": 428,
+     "when": "Sat, 15 Aug, 3:00 PM - 6:35 PM",
+     "zone_free": 0,
+     "zone_rows": [
+      "G",
+      "F",
+      "E",
+      "D",
+      "C"
+     ],
+     "zone_total": 80
+    },
+    "status": "Available",
+    "subtitle_language": "en",
+    "time": "03:00 PM",
+    "title": "THE ODYSSEY",
+    "token": "thuODeBMwL9hWeipq0T9CA==",
+    "ts": 1786786200000,
+    "variant_id": "37656"
+   },
+   "2026-08-15|09:05 AM|SCREEN 1": {
+    "booking_url": "https://www.pvrcinemas.com/seatlayout/thuODeBMwL94IT9q9MvJrg==",
+    "canonical_film_id": "35098",
+    "date": "2026-08-15",
+    "ends_ts": 1786777680000,
+    "experience": "imax",
+    "film": "THE ODYSSEY (ENGLISH IMAX WITH ENGLISH SUBTITLE)",
+    "format": "IMAX",
+    "formats": [
+     "IMAX"
+    ],
+    "language": "en",
+    "language_disputed": false,
+    "language_name": "English",
+    "language_source": "variant",
+    "screen": "SCREEN 1",
+    "seats": {
+     "alternatives": [
+      {
+       "best_run": 8,
+       "best_where": "H27-H34",
+       "depth": 0.5333333333333333,
+       "free": 22,
+       "in_zone": false,
+       "row": "H"
+      },
+      {
+       "best_run": 8,
+       "best_where": "I27-I34",
+       "depth": 0.4666666666666667,
+       "free": 24,
+       "in_zone": false,
+       "row": "I"
+      },
+      {
+       "best_run": 8,
+       "best_where": "J27-J34",
+       "depth": 0.4,
+       "free": 28,
+       "in_zone": false,
+       "row": "J"
+      },
+      {
+       "best_run": 16,
+       "best_where": "K9-K24",
+       "depth": 0.3333333333333333,
+       "free": 30,
+       "in_zone": false,
+       "row": "K"
+      },
+      {
+       "best_run": 16,
+       "best_where": "L9-L24",
+       "depth": 0.26666666666666666,
+       "free": 22,
+       "in_zone": false,
+       "row": "L"
+      },
+      {
+       "best_run": 16,
+       "best_where": "M9-M24",
+       "depth": 0.2,
+       "free": 22,
+       "in_zone": false,
+       "row": "M"
+      }
+     ],
+     "best_run": 2,
+     "best_where": "G9-G10",
+     "cinema": "INOX Luxe Phoenix Market City, Velachery  (formerly Jazz Cinemas)Chennai",
+     "experience": "IMAX",
+     "free": 265,
+     "free_outside_zone": 262,
+     "meets_party_size": true,
+     "party_size": 1,
+     "rows_seen": [
+      "P",
+      "O",
+      "N",
+      "M",
+      "L",
+      "K",
+      "J",
+      "I",
+      "H",
+      "G",
+      "F",
+      "E",
+      "D",
+      "C",
+      "B",
+      "A"
+     ],
+     "seats": [
+      "G9",
+      "G10",
+      "F10"
+     ],
+     "total": 428,
+     "when": "Sat, 15 Aug, 9:05 AM - 12:38 PM",
+     "zone_free": 3,
+     "zone_rows": [
+      "G",
+      "F",
+      "E",
+      "D",
+      "C"
+     ],
+     "zone_total": 80
+    },
+    "status": "Available",
+    "subtitle_language": "en",
+    "time": "09:05 AM",
+    "title": "THE ODYSSEY",
+    "token": "thuODeBMwL94IT9q9MvJrg==",
+    "ts": 1786764900000,
+    "variant_id": "37656"
+   },
+   "2026-08-15|10:20 PM|SCREEN 1": {
+    "booking_url": "https://www.pvrcinemas.com/seatlayout/thuODeBMwL(aEMQQ6cja6g==",
+    "canonical_film_id": "35098",
+    "date": "2026-08-15",
+    "ends_ts": 1786825500000,
+    "experience": "imax",
+    "film": "THE ODYSSEY (ENGLISH IMAX WITH ENGLISH SUBTITLE)",
+    "format": "IMAX",
+    "formats": [
+     "IMAX"
+    ],
+    "language": "en",
+    "language_disputed": false,
+    "language_name": "English",
+    "language_source": "variant",
+    "screen": "SCREEN 1",
+    "seats": {
+     "alternatives": [
+      {
+       "best_run": 8,
+       "best_where": "H27-H34",
+       "depth": 0.5333333333333333,
+       "free": 22,
+       "in_zone": false,
+       "row": "H"
+      },
+      {
+       "best_run": 8,
+       "best_where": "I27-I34",
+       "depth": 0.4666666666666667,
+       "free": 23,
+       "in_zone": false,
+       "row": "I"
+      },
+      {
+       "best_run": 16,
+       "best_where": "J9-J24",
+       "depth": 0.4,
+       "free": 30,
+       "in_zone": false,
+       "row": "J"
+      },
+      {
+       "best_run": 16,
+       "best_where": "K9-K24",
+       "depth": 0.3333333333333333,
+       "free": 30,
+       "in_zone": false,
+       "row": "K"
+      },
+      {
+       "best_run": 16,
+       "best_where": "L9-L24",
+       "depth": 0.26666666666666666,
+       "free": 22,
+       "in_zone": false,
+       "row": "L"
+      },
+      {
+       "best_run": 16,
+       "best_where": "M9-M24",
+       "depth": 0.2,
+       "free": 22,
+       "in_zone": false,
+       "row": "M"
+      }
+     ],
+     "best_run": 2,
+     "best_where": "G9-G10",
+     "cinema": "INOX Luxe Phoenix Market City, Velachery  (formerly Jazz Cinemas)Chennai",
+     "experience": "IMAX",
+     "free": 270,
+     "free_outside_zone": 266,
+     "meets_party_size": true,
+     "party_size": 1,
+     "rows_seen": [
+      "P",
+      "O",
+      "N",
+      "M",
+      "L",
+      "K",
+      "J",
+      "I",
+      "H",
+      "G",
+      "F",
+      "E",
+      "D",
+      "C",
+      "B",
+      "A"
+     ],
+     "seats": [
+      "G9",
+      "G10",
+      "F9",
+      "F10"
+     ],
+     "total": 428,
+     "when": "Sat, 15 Aug, 10:20 PM - 1:55 AM",
+     "zone_free": 4,
+     "zone_rows": [
+      "G",
+      "F",
+      "E",
+      "D",
+      "C"
+     ],
+     "zone_total": 80
+    },
+    "status": "Available",
+    "subtitle_language": "en",
+    "time": "10:20 PM",
+    "title": "THE ODYSSEY",
+    "token": "thuODeBMwL(aEMQQ6cja6g==",
+    "ts": 1786812600000,
+    "variant_id": "37656"
+   }
+  },
+  "2026-08-16": {
+   "2026-08-16|03:00 PM|SCREEN 1": {
+    "booking_url": "https://www.pvrcinemas.com/seatlayout/0j(oDT)YUnwiZb(wlD2)Kg==",
+    "canonical_film_id": "35098",
+    "date": "2026-08-16",
+    "ends_ts": 1786885500000,
+    "experience": "imax",
+    "film": "THE ODYSSEY (ENGLISH IMAX WITH ENGLISH SUBTITLE)",
+    "format": "IMAX",
+    "formats": [
+     "IMAX"
+    ],
+    "language": "en",
+    "language_disputed": false,
+    "language_name": "English",
+    "language_source": "variant",
+    "screen": "SCREEN 1",
+    "seats": {
+     "alternatives": [
+      {
+       "best_run": 8,
+       "best_where": "H27-H34",
+       "depth": 0.5333333333333333,
+       "free": 12,
+       "in_zone": false,
+       "row": "H"
+      },
+      {
+       "best_run": 8,
+       "best_where": "I27-I34",
+       "depth": 0.4666666666666667,
+       "free": 17,
+       "in_zone": false,
+       "row": "I"
+      },
+      {
+       "best_run": 8,
+       "best_where": "J27-J34",
+       "depth": 0.4,
+       "free": 26,
+       "in_zone": false,
+       "row": "J"
+      },
+      {
+       "best_run": 16,
+       "best_where": "K9-K24",
+       "depth": 0.3333333333333333,
+       "free": 30,
+       "in_zone": false,
+       "row": "K"
+      },
+      {
+       "best_run": 16,
+       "best_where": "L9-L24",
+       "depth": 0.26666666666666666,
+       "free": 22,
+       "in_zone": false,
+       "row": "L"
+      },
+      {
+       "best_run": 16,
+       "best_where": "M9-M24",
+       "depth": 0.2,
+       "free": 22,
+       "in_zone": false,
+       "row": "M"
+      }
+     ],
+     "best_run": 1,
+     "best_where": "G14",
+     "cinema": "INOX Luxe Phoenix Market City, Velachery  (formerly Jazz Cinemas)Chennai",
+     "experience": "IMAX",
+     "free": 220,
+     "free_outside_zone": 219,
+     "meets_party_size": true,
+     "party_size": 1,
+     "rows_seen": [
+      "P",
+      "O",
+      "N",
+      "M",
+      "L",
+      "K",
+      "J",
+      "I",
+      "H",
+      "G",
+      "F",
+      "E",
+      "D",
+      "C",
+      "B",
+      "A"
+     ],
+     "seats": [
+      "G14"
+     ],
+     "total": 428,
+     "when": "Sun, 16 Aug, 3:00 PM - 6:35 PM",
+     "zone_free": 1,
+     "zone_rows": [
+      "G",
+      "F",
+      "E",
+      "D",
+      "C"
+     ],
+     "zone_total": 80
+    },
+    "status": "Available",
+    "subtitle_language": "en",
+    "time": "03:00 PM",
+    "title": "THE ODYSSEY",
+    "token": "0j(oDT)YUnwiZb(wlD2)Kg==",
+    "ts": 1786872600000,
+    "variant_id": "37656"
+   },
+   "2026-08-16|09:05 AM|SCREEN 1": {
+    "booking_url": "https://www.pvrcinemas.com/seatlayout/0j(oDT)YUnzfPcbBEqZACQ==",
+    "canonical_film_id": "35098",
+    "date": "2026-08-16",
+    "ends_ts": 1786864080000,
+    "experience": "imax",
+    "film": "THE ODYSSEY (ENGLISH IMAX WITH ENGLISH SUBTITLE)",
+    "format": "IMAX",
+    "formats": [
+     "IMAX"
+    ],
+    "language": "en",
+    "language_disputed": false,
+    "language_name": "English",
+    "language_source": "variant",
+    "screen": "SCREEN 1",
+    "seats": {
+     "alternatives": [
+      {
+       "best_run": 8,
+       "best_where": "H27-H34",
+       "depth": 0.5333333333333333,
+       "free": 25,
+       "in_zone": false,
+       "row": "H"
+      },
+      {
+       "best_run": 8,
+       "best_where": "I27-I34",
+       "depth": 0.4666666666666667,
+       "free": 22,
+       "in_zone": false,
+       "row": "I"
+      },
+      {
+       "best_run": 16,
+       "best_where": "J9-J24",
+       "depth": 0.4,
+       "free": 30,
+       "in_zone": false,
+       "row": "J"
+      },
+      {
+       "best_run": 16,
+       "best_where": "K9-K24",
+       "depth": 0.3333333333333333,
+       "free": 30,
+       "in_zone": false,
+       "row": "K"
+      },
+      {
+       "best_run": 16,
+       "best_where": "L9-L24",
+       "depth": 0.26666666666666666,
+       "free": 22,
+       "in_zone": false,
+       "row": "L"
+      },
+      {
+       "best_run": 16,
+       "best_where": "M9-M24",
+       "depth": 0.2,
+       "free": 22,
+       "in_zone": false,
+       "row": "M"
+      }
+     ],
+     "best_run": 3,
+     "best_where": "G9-G11",
+     "cinema": "INOX Luxe Phoenix Market City, Velachery  (formerly Jazz Cinemas)Chennai",
+     "experience": "IMAX",
+     "free": 278,
+     "free_outside_zone": 267,
+     "meets_party_size": true,
+     "party_size": 1,
+     "rows_seen": [
+      "P",
+      "O",
+      "N",
+      "M",
+      "L",
+      "K",
+      "J",
+      "I",
+      "H",
+      "G",
+      "F",
+      "E",
+      "D",
+      "C",
+      "B",
+      "A"
+     ],
+     "seats": [
+      "G9",
+      "G10",
+      "G11",
+      "G20",
+      "G23",
+      "G24",
+      "F9",
+      "F11",
+      "F12",
+      "F13",
+      "F22"
+     ],
+     "total": 428,
+     "when": "Sun, 16 Aug, 9:05 AM - 12:38 PM",
+     "zone_free": 11,
+     "zone_rows": [
+      "G",
+      "F",
+      "E",
+      "D",
+      "C"
+     ],
+     "zone_total": 80
+    },
+    "status": "Available",
+    "subtitle_language": "en",
+    "time": "09:05 AM",
+    "title": "THE ODYSSEY",
+    "token": "0j(oDT)YUnzfPcbBEqZACQ==",
+    "ts": 1786851300000,
+    "variant_id": "37656"
+   },
+   "2026-08-16|10:20 PM|SCREEN 1": {
+    "booking_url": "https://www.pvrcinemas.com/seatlayout/qp5Jv(7)zNlYMNQ18zE6DA==",
+    "canonical_film_id": "35098",
+    "date": "2026-08-16",
+    "ends_ts": 1786911900000,
+    "experience": "imax",
+    "film": "THE ODYSSEY (ENGLISH IMAX WITH ENGLISH SUBTITLE)",
+    "format": "IMAX",
+    "formats": [
+     "IMAX"
+    ],
+    "language": "en",
+    "language_disputed": false,
+    "language_name": "English",
+    "language_source": "variant",
+    "screen": "SCREEN 1",
+    "seats": {
+     "alternatives": [
+      {
+       "best_run": 16,
+       "best_where": "H9-H24",
+       "depth": 0.5333333333333333,
+       "free": 30,
+       "in_zone": false,
+       "row": "H"
+      },
+      {
+       "best_run": 16,
+       "best_where": "I9-I24",
+       "depth": 0.4666666666666667,
+       "free": 30,
+       "in_zone": false,
+       "row": "I"
+      },
+      {
+       "best_run": 16,
+       "best_where": "J9-J24",
+       "depth": 0.4,
+       "free": 30,
+       "in_zone": false,
+       "row": "J"
+      },
+      {
+       "best_run": 16,
+       "best_where": "K9-K24",
+       "depth": 0.3333333333333333,
+       "free": 30,
+       "in_zone": false,
+       "row": "K"
+      },
+      {
+       "best_run": 16,
+       "best_where": "L9-L24",
+       "depth": 0.26666666666666666,
+       "free": 22,
+       "in_zone": false,
+       "row": "L"
+      },
+      {
+       "best_run": 16,
+       "best_where": "M9-M24",
+       "depth": 0.2,
+       "free": 22,
+       "in_zone": false,
+       "row": "M"
+      }
+     ],
+     "best_run": 7,
+     "best_where": "G9-G15",
+     "cinema": "INOX Luxe Phoenix Market City, Velachery  (formerly Jazz Cinemas)Chennai",
+     "experience": "IMAX",
+     "free": 306,
+     "free_outside_zone": 278,
+     "meets_party_size": true,
+     "party_size": 1,
+     "rows_seen": [
+      "P",
+      "O",
+      "N",
+      "M",
+      "L",
+      "K",
+      "J",
+      "I",
+      "H",
+      "G",
+      "F",
+      "E",
+      "D",
+      "C",
+      "B",
+      "A"
+     ],
+     "seats": [
+      "G9",
+      "G10",
+      "G11",
+      "G12",
+      "G13",
+      "G14",
+      "G15",
+      "G18",
+      "G19",
+      "G20",
+      "G21",
+      "G22",
+      "G23",
+      "G24",
+      "F9",
+      "F10",
+      "F11",
+      "F12",
+      "F13",
+      "F14",
+      "F15",
+      "F18",
+      "F19",
+      "F20",
+      "F21",
+      "F22",
+      "F23",
+      "F24"
+     ],
+     "total": 428,
+     "when": "Sun, 16 Aug, 10:20 PM - 1:55 AM",
+     "zone_free": 28,
+     "zone_rows": [
+      "G",
+      "F",
+      "E",
+      "D",
+      "C"
+     ],
+     "zone_total": 80
+    },
+    "status": "Available",
+    "subtitle_language": "en",
+    "time": "10:20 PM",
+    "title": "THE ODYSSEY",
+    "token": "qp5Jv(7)zNlYMNQ18zE6DA==",
+    "ts": 1786899000000,
+    "variant_id": "37656"
+   }
+  }
+ },
  "__heartbeat__": {
   "last_alert": null,
-  "last_success": "2026-08-12T09:56:56+05:30"
+  "last_success": "2026-08-12T11:31:44+05:30"
  }
 }
