@@ -101,12 +101,16 @@ def show_key(show):
     return "%s|%s|%s" % (show["date"], show["time"], show["screen"])
 
 
-def poll(watch, today, verbose=False, seats=None):
+def poll(watch, today, verbose=False, seats=None, known=None):
     """Poll the forward window. Returns {date: {show_key: show}} for open dates.
 
     `seats` overrides the watch's seat_detail for this cycle. Schedule-only
     polling costs one call per date instead of one per showtime, which is what
     makes it affordable to poll often while waiting for a window to open.
+
+    `known` is the set of dates already in state. A date outside it has never
+    been seen open before, and its seat maps are fetched even in a schedule-only
+    cycle - see below for why.
 
     Sets poll.answered to the number of dates the upstream actually answered
     for. A "closed" date counts: the API replied, it just has nothing on sale.
@@ -151,6 +155,23 @@ def poll(watch, today, verbose=False, seats=None):
         hits = {show_key(s): s for s in shows if matches(s, watch)}
 
         want_seats = watch.get("seat_detail") if seats is None else seats
+
+        # The alert for a window opening is the one that decides whether you get
+        # a good seat at all: the zone is 100% free the moment it opens and can
+        # be gone before the next cycle. Waking someone with "booking opened" and
+        # no seat read costs them the only minutes that matter, so a date that
+        # has never been seen open pays for its seat maps immediately, even in a
+        # schedule-only cycle. It happens once per date, not once per poll.
+        if (
+            not want_seats
+            and watch.get("seat_detail")
+            and known is not None
+            and date_str not in known
+        ):
+            want_seats = True
+            if verbose:
+                print("  %s  first sighting - reading seats now" % date_str)
+
         if want_seats:
             # One seat-map call per showtime, so fetch them concurrently or a
             # 5-minute cron spends most of its life waiting on serial requests.
@@ -614,20 +635,6 @@ def run_once(config, state, args, state_path, mode_hint=None):
             continue
 
         print("%s" % watch["name"])
-        # Waiting for a window to open, there is nothing to read a seat map FOR,
-        # and skipping them turns a cycle from one call per showtime into one per
-        # date. That is what makes polling often affordable.
-        seats = False if mode_hint == NEAR_OPEN else None
-        try:
-            snapshot = poll(watch, today, verbose=args.show_all, seats=seats)
-        except core.Blocked as exc:
-            # Upstream is refusing us. Skipping a cycle is the correct outcome -
-            # crashing the job turns a transient block into a red workflow and
-            # loses the run's state write.
-            print("  skipped: %s" % exc, file=sys.stderr)
-            blocked += 1
-            continue
-        answered_total += getattr(poll, "answered", 0)
         # A watch that has polled for days with nothing on sale sits at {} - which
         # is NOT the same as never having polled, though both are falsy. Reading
         # it as "first run" made the watcher record its first real opening as a
@@ -636,6 +643,24 @@ def run_once(config, state, args, state_path, mode_hint=None):
         previous = state.get(watch["name"])
         first_ever = previous is None
         previous = previous or {}
+
+        # Waiting for a window to open, there is nothing to read a seat map FOR,
+        # and skipping them turns a cycle from one call per showtime into one per
+        # date. That is what makes polling often affordable. Dates we have never
+        # seen open are the exception - poll() reads their seats regardless.
+        seats = False if mode_hint == NEAR_OPEN else None
+        try:
+            snapshot = poll(
+                watch, today, verbose=args.show_all, seats=seats, known=set(previous)
+            )
+        except core.Blocked as exc:
+            # Upstream is refusing us. Skipping a cycle is the correct outcome -
+            # crashing the job turns a transient block into a red workflow and
+            # loses the run's state write.
+            print("  skipped: %s" % exc, file=sys.stderr)
+            blocked += 1
+            continue
+        answered_total += getattr(poll, "answered", 0)
 
         # Before diffing: a date that opened starts its held-row clock now, and
         # the cadence has to be decided even if an alert later fails to send.
