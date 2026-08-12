@@ -29,8 +29,9 @@
     11,
     21
    ],
-   "min_adjacent": 1,
-   "min_lead_minutes": 90
+   "min_adjacent": 2,
+   "min_lead_minutes": 90,
+   "party_size": 2
   },
   {
    "name": "The Odyssey - IMAX - Phoenix Velachery",
@@ -45,13 +46,14 @@
    "horizon_days": 16,
    "alert_on_restock": true,
    "seat_detail": true,
-   "min_adjacent": 1,
+   "min_adjacent": 2,
    "experience": "imax",
    "weekdays": [
     "Sat",
     "Sun"
    ],
-   "min_lead_minutes": 90
+   "min_lead_minutes": 90,
+   "party_size": 2
   }
  ]
 }

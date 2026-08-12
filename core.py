@@ -1048,10 +1048,14 @@ def seat_report(token, zone_rows=None, zone_seats=None, want_map=False, party_si
     seat_rows = [r for r in output.get("rows") or [] if r.get("t") == "seats"]
     zone = resolve_zone(seat_rows, zone_rows, zone_seats)
 
-    total = free = zone_total = zone_free = 0
+    total = free = zone_total = zone_free = zone_held = 0
     zone_names = []
     best_run, best_where = 0, ""
     picture = []
+    # Every distinct `s` value seen. Only 1 (free) and 2 (taken) are confirmed;
+    # a date that opens with rows withheld has to be showing SOMETHING else, and
+    # this is how we find out what. Cheap enough to always collect.
+    status_codes = {}
 
     for row in seat_rows:
         name = row.get("n")
@@ -1067,7 +1071,9 @@ def seat_report(token, zone_rows=None, zone_seats=None, want_map=False, party_si
                 continue
 
             total += 1
-            is_free = seat.get("s") == 1
+            code = seat.get("s")
+            status_codes[str(code)] = status_codes.get(str(code), 0) + 1
+            is_free = code == 1
             free += is_free
             try:
                 number = int(seat.get("displaynumber") or 0)
@@ -1089,6 +1095,11 @@ def seat_report(token, zone_rows=None, zone_seats=None, want_map=False, party_si
                     best_run = len(run)
                     best_where = _span(run)
             else:
+                # 2 is sold. Anything else is the house withholding the seat -
+                # a hold released later reads as newly free, which is a
+                # different thing to wait for than someone cancelling.
+                if code != 2:
+                    zone_held += 1
                 run = []
 
         picture.append("%-3s %s" % (name, glyphs))
@@ -1131,6 +1142,8 @@ def seat_report(token, zone_rows=None, zone_seats=None, want_map=False, party_si
         "free": free,
         "zone_total": zone_total,
         "zone_free": zone_free,
+        "zone_held": zone_held,
+        "status_codes": status_codes,
         "best_run": best_run,
         "best_where": best_where,
         "seats": zone_names[:60],

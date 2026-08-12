@@ -29,6 +29,7 @@ import datetime
 import json
 import os
 import sys
+import time
 from concurrent import futures
 
 import core
@@ -45,8 +46,18 @@ def pvr_fetch_day(watch, date_str):
     )
 
 
+def party_of(watch):
+    """How many seats have to be together for this watch to be satisfied."""
+    return max(1, int(watch.get("party_size") or watch.get("min_adjacent", 1)))
+
+
 def pvr_fetch_seats(token, watch):
-    return core.seat_report(token, watch.get("zone_rows"), watch.get("zone_seats"))
+    return core.seat_report(
+        token,
+        watch.get("zone_rows"),
+        watch.get("zone_seats"),
+        party_size=party_of(watch),
+    )
 
 
 def pvr_booking_url(watch, date_str):
@@ -90,8 +101,12 @@ def show_key(show):
     return "%s|%s|%s" % (show["date"], show["time"], show["screen"])
 
 
-def poll(watch, today, verbose=False):
+def poll(watch, today, verbose=False, seats=None):
     """Poll the forward window. Returns {date: {show_key: show}} for open dates.
+
+    `seats` overrides the watch's seat_detail for this cycle. Schedule-only
+    polling costs one call per date instead of one per showtime, which is what
+    makes it affordable to poll often while waiting for a window to open.
 
     Sets poll.answered to the number of dates the upstream actually answered
     for. A "closed" date counts: the API replied, it just has nothing on sale.
@@ -135,7 +150,8 @@ def poll(watch, today, verbose=False):
         answered += 1
         hits = {show_key(s): s for s in shows if matches(s, watch)}
 
-        if watch.get("seat_detail"):
+        want_seats = watch.get("seat_detail") if seats is None else seats
+        if want_seats:
             # One seat-map call per showtime, so fetch them concurrently or a
             # 5-minute cron spends most of its life waiting on serial requests.
             # A lapsed show has already started - it has no seat map and can't
@@ -231,6 +247,114 @@ def check_heartbeat(state, answered_total, dry_run=False):
     beat["last_alert"] = stamp
     state[HEARTBEAT_KEY] = beat
     return True
+
+
+# --------------------------------------------------------------------------
+# Cadence
+# --------------------------------------------------------------------------
+#
+# The cron cannot be the answer. */5 is GitHub's floor and Actions throttles
+# scheduled workflows to roughly hourly under load, so "poll faster" is not a
+# setting we have. What we do have is the length of a run: a job may hold itself
+# open and keep polling. So the rate is decided here, from what the last poll
+# saw, and a run only holds open when there is something to hold open FOR.
+#
+# Not aggressive by design. The upstream blocks an IP that hammers it and then
+# refuses everything for 15 minutes (core.BLOCK_COOLDOWN) - being blocked during
+# the opening is precisely the failure this is meant to prevent.
+
+OPENED_KEY = "__opened__"
+COLD, NEAR_OPEN, HELD = "cold", "near_open", "held"
+
+# PVR sells on a rolling window of about 5 days. The hour it flips is not
+# published, so treat everything inside this many days as due.
+OPEN_LEAD_DAYS = int(os.environ.get("PVR_OPEN_LEAD_DAYS", "6"))
+# How long after a date opens its withheld rows stay worth watching for.
+HOLD_WATCH_HOURS = float(os.environ.get("PVR_HOLD_WATCH_HOURS", "48"))
+# Seconds between polls while holding a run open.
+INTERVALS = {
+    # Schedule only - one call per date, so this can be frequent cheaply.
+    NEAR_OPEN: int(os.environ.get("PVR_NEAR_INTERVAL", "600")),
+    # A seat map per showtime, so a good deal more expensive per cycle.
+    HELD: int(os.environ.get("PVR_HELD_INTERVAL", "300")),
+}
+# Total seconds a single run may hold itself open. Under GitHub's 6h job cap and
+# short enough that the next cron pickup takes over cleanly.
+HOLD_BUDGET = int(os.environ.get("PVR_HOLD_BUDGET", "3000"))
+
+
+def wanted_dates(watch, today):
+    """The dates this watch would actually go on, inside its horizon."""
+    want_days = watch.get("weekdays")
+    out = []
+    for offset in range(watch.get("horizon_days", 12)):
+        date = today + datetime.timedelta(days=offset)
+        if want_days and date.strftime("%a") not in want_days:
+            continue
+        out.append(date)
+    return out
+
+
+def cadence(watch, snapshot, state, today):
+    """(mode, reason) - how hard to poll right now, from what we just saw.
+
+    held      a target date is on sale but cannot seat the party. PVR opens a
+              date with rows withheld, so the seats we want routinely appear
+              minutes or hours AFTER the window itself; "booking opened" is not
+              the end of the wait. Polls with seat maps.
+    near_open a target date is inside the selling window but not on sale yet.
+              Polls the schedule only - one call per date.
+    cold      nothing imminent. One pass and exit, as before.
+    """
+    need = party_of(watch)
+    opened = (state.get(OPENED_KEY) or {}).get(watch["name"], {})
+    now = core.now_ist()
+
+    for date_str in sorted(d for d, v in snapshot.items() if v):
+        first = opened.get(date_str)
+        if first:
+            age_h = (
+                now - datetime.datetime.fromisoformat(first)
+            ).total_seconds() / 3600.0
+            if age_h > HOLD_WATCH_HOURS:
+                # Long open and still short - that is a sold-out show, not a
+                # held one. Restocks are the ordinary cron's job.
+                continue
+
+        rated = [s for s in snapshot[date_str].values() if s.get("seats")]
+        if not rated:
+            if watch.get("seat_detail"):
+                # Opened during a schedule-only cycle. Go and read the seats.
+                return HELD, "%s just opened, seats not read yet" % date_str
+            continue
+
+        if any(s["seats"].get("best_run", 0) >= need for s in rated):
+            continue  # satisfiable already; nothing to hold open for
+
+        held = sum(s["seats"].get("zone_held", 0) for s in rated)
+        return HELD, "%s open but no %d together in zone%s" % (
+            date_str,
+            need,
+            " (%d seat(s) withheld)" % held if held else "",
+        )
+
+    for date in wanted_dates(watch, today):
+        if snapshot.get(date.isoformat()):
+            continue
+        out = (date - today).days
+        if out <= OPEN_LEAD_DAYS:
+            return NEAR_OPEN, "%s due to open (%d days out)" % (date.isoformat(), out)
+
+    return COLD, "nothing due"
+
+
+def record_opened(state, watch, snapshot):
+    """First time each date answered with shows. Ages the held-row watch."""
+    book = state.setdefault(OPENED_KEY, {}).setdefault(watch["name"], {})
+    stamp = core.now_ist().isoformat(timespec="seconds")
+    for date_str, shows in snapshot.items():
+        if shows and date_str not in book:
+            book[date_str] = stamp
 
 
 # --------------------------------------------------------------------------
@@ -338,7 +462,10 @@ def short_seats(show):
     if not report:
         return show.get("status", "")
     if not report.get("best_run"):
-        return "no good seats"
+        held = report.get("zone_held") or 0
+        # Withheld and sold look the same in the seat map until you count the
+        # status codes, and the difference decides whether waiting is worth it.
+        return "no good seats (%d withheld)" % held if held else "no good seats"
     if report["best_run"] == 1:
         return "1 seat - %s" % report["best_where"]
     return "%d together - %s" % (report["best_run"], report["best_where"])
@@ -376,6 +503,15 @@ def format_alert(watch, events):
             # Two columns, so the times line up and the eye runs straight down
             # the seat column.
             lines.append("%-9s %s" % (s["time"], short_seats(s)))
+
+    # A window opening is not the same as your seats being buyable - PVR opens a
+    # date with rows withheld. Saying "booking opened" and stopping there sends
+    # someone to a seat map with nothing on it, so spell out which it is.
+    need = party_of(watch)
+    seen = [s for ev in events for s in ev["shows"] if s.get("seats")]
+    if seen and not any(s["seats"].get("best_run", 0) >= need for s in seen):
+        lines.append("")
+        lines.append("No %d together in the zone yet - still watching." % need)
 
     # Anything that needs you to act now goes at max priority, so it breaks
     # through Do Not Disturb. An extra show on an already-open date does not.
@@ -417,8 +553,6 @@ def stream(config, state, args, state_path):
     Nothing is delivered to a notification channel here; the caller reading
     stdout is the channel.
     """
-    import time
-
     while True:
         today = core.today_ist()
         for watch in config["watches"]:
@@ -461,43 +595,17 @@ def stream(config, state, args, state_path):
         time.sleep(max(30, args.interval))
 
 
-def main():
-    ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--dry-run", action="store_true", help="never write state or notify")
-    ap.add_argument("--show-all", action="store_true", help="print every matching show")
-    ap.add_argument("--watch", help="run only the watch with this name")
-    ap.add_argument(
-        "--stream",
-        action="store_true",
-        help="poll forever, print one line per event (for an agent to watch)",
-    )
-    ap.add_argument(
-        "--interval", type=int, default=60, help="seconds between polls in --stream"
-    )
-    ap.add_argument(
-        "--state",
-        default=STATE_PATH,
-        help="state file to use. Point an in-session --stream at its own copy "
-        "so it does not fight the cron over the committed one.",
-    )
-    args = ap.parse_args()
+def run_once(config, state, args, state_path, mode_hint=None):
+    """One full pass over every enabled watch. Returns (mode, reason).
 
-    with open(CONFIG_PATH) as fh:
-        config = json.load(fh)
-
-    state_path = args.state
-    state = {}
-    if os.path.exists(state_path):
-        with open(state_path) as fh:
-            state = json.load(fh)
-
-    if args.stream:
-        return stream(config, state, args, state_path)
-
+    The mode is the hottest any single watch asked for, since one date about to
+    release its held rows is reason enough to keep the whole run alive.
+    """
     today = core.today_ist()
     fired = 0
     blocked = 0
     answered_total = 0
+    modes = []
 
     for watch in config["watches"]:
         if not watch.get("enabled", True):
@@ -506,8 +614,12 @@ def main():
             continue
 
         print("%s" % watch["name"])
+        # Waiting for a window to open, there is nothing to read a seat map FOR,
+        # and skipping them turns a cycle from one call per showtime into one per
+        # date. That is what makes polling often affordable.
+        seats = False if mode_hint == NEAR_OPEN else None
         try:
-            snapshot = poll(watch, today, verbose=args.show_all)
+            snapshot = poll(watch, today, verbose=args.show_all, seats=seats)
         except core.Blocked as exc:
             # Upstream is refusing us. Skipping a cycle is the correct outcome -
             # crashing the job turns a transient block into a red workflow and
@@ -516,11 +628,25 @@ def main():
             blocked += 1
             continue
         answered_total += getattr(poll, "answered", 0)
-        previous = state.get(watch["name"], {})
+        # A watch that has polled for days with nothing on sale sits at {} - which
+        # is NOT the same as never having polled, though both are falsy. Reading
+        # it as "first run" made the watcher record its first real opening as a
+        # baseline and say nothing: it swallowed the 15/16 Aug window on
+        # 2026-08-12. Presence of the key is the baseline, not its contents.
+        previous = state.get(watch["name"])
+        first_ever = previous is None
+        previous = previous or {}
+
+        # Before diffing: a date that opened starts its held-row clock now, and
+        # the cadence has to be decided even if an alert later fails to send.
+        record_opened(state, watch, snapshot)
+        mode, reason = cadence(watch, snapshot, state, today)
+        modes.append((mode, "%s - %s" % (watch["name"], reason)))
+        print("  cadence: %s - %s" % (mode, reason))
 
         # First ever run: record the baseline silently, or every open date
         # would fire as a discovery.
-        if not previous:
+        if first_ever:
             # Count only dates that actually answered - an errored date is not
             # an open one, and saying so overstates what was recorded.
             print("  baseline recorded (%d open date(s))"
@@ -562,6 +688,71 @@ def main():
 
     if blocked:
         print("%d watch(es) skipped - upstream blocked this runner" % blocked)
+        # Polling harder into a block is how the block gets extended.
+        return COLD, "upstream blocked"
+
+    for level in (HELD, NEAR_OPEN):
+        for mode, reason in modes:
+            if mode == level:
+                return level, reason
+    return COLD, "nothing due"
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--dry-run", action="store_true", help="never write state or notify")
+    ap.add_argument("--show-all", action="store_true", help="print every matching show")
+    ap.add_argument("--watch", help="run only the watch with this name")
+    ap.add_argument(
+        "--once",
+        action="store_true",
+        help="one pass and exit; never hold the run open to keep polling",
+    )
+    ap.add_argument(
+        "--stream",
+        action="store_true",
+        help="poll forever, print one line per event (for an agent to watch)",
+    )
+    ap.add_argument(
+        "--interval", type=int, default=60, help="seconds between polls in --stream"
+    )
+    ap.add_argument(
+        "--state",
+        default=STATE_PATH,
+        help="state file to use. Point an in-session --stream at its own copy "
+        "so it does not fight the cron over the committed one.",
+    )
+    args = ap.parse_args()
+
+    with open(CONFIG_PATH) as fh:
+        config = json.load(fh)
+
+    state_path = args.state
+    state = {}
+    if os.path.exists(state_path):
+        with open(state_path) as fh:
+            state = json.load(fh)
+
+    if args.stream:
+        return stream(config, state, args, state_path)
+
+    mode, reason = run_once(config, state, args, state_path)
+    if args.once or args.dry_run:
+        return 0
+
+    # Hold the run open while something is imminent. The cron fires this job at
+    # whatever rate Actions feels like; how long each job LIVES is the only part
+    # of the cadence we control, so that is the lever being pulled.
+    deadline = time.monotonic() + HOLD_BUDGET
+    while mode in INTERVALS:
+        wait = INTERVALS[mode]
+        if time.monotonic() + wait > deadline:
+            print("hold budget spent - the next scheduled run takes over")
+            break
+        print("holding (%s): %s - next poll in %ds" % (mode, reason, wait))
+        time.sleep(wait)
+        mode, reason = run_once(config, state, args, state_path, mode_hint=mode)
+
     return 0
 
 

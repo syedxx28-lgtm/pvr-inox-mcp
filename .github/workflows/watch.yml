@@ -18,6 +18,10 @@ permissions:
 jobs:
   watch:
     runs-on: ubuntu-latest
+    # A run holds itself open while a booking window is imminent (see cadence()
+    # in watch.py), so the job is expected to live ~50 min, not 20 seconds. The
+    # cap is the backstop, not the plan.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
 
