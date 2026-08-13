@@ -454,6 +454,11 @@ def carry_ever_free(previous, snapshot):
             was = set((prev_shows.get(key) or {}).get("ever_free") or [])
             report = show.get("seats") or {}
             show["ever_free"] = sorted(was | set(report.get("free_labels") or []))
+            # Stamps WHICH roster the history was built against. History gathered
+            # when only the zone was tracked says nothing about the rest of the
+            # hall, and reading it as if it did would report every free seat in
+            # the house as newly released. See diff().
+            show["ever_free_scope"] = "hall"
 
 
 def never_free(show):
@@ -549,11 +554,21 @@ def diff(watch, previous, snapshot):
             # watching was never on sale to begin with - the house was holding
             # it. That is a different event from a cancellation and a better one:
             # releases come in blocks, cancellations come one seat at a time.
+            # Only meaningful once the previous run's history covered the same
+            # roster. On the cycle that widens it, seed and stay quiet - every
+            # free seat in the hall would otherwise read as a release.
+            widened = before.get("ever_free_scope") != "hall"
             opened_up = sorted(
                 set((show.get("seats") or {}).get("free_labels") or [])
                 - set(before.get("ever_free") or [])
             )
-            if opened_up:
+            if widened and opened_up:
+                print(
+                    "  %s %s: seeded hall history (%d free), not alerting"
+                    % (date_str, show["time"], len(opened_up)),
+                    file=sys.stderr,
+                )
+            elif opened_up:
                 events.append(
                     {
                         "kind": "released",
