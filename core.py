@@ -1055,6 +1055,12 @@ def seat_report(token, zone_rows=None, zone_seats=None, want_map=False, party_si
     # withheld seat with the same code as a sold one (only 1 and 2 are ever
     # seen), so "never once free" is the only way to tell the two apart.
     zone_labels = []
+    # The same rosters for the WHOLE hall. Houses hold back more than the centre
+    # block - the last row is commonly kept for VIP requests and released a few
+    # hours before the show - and a caller tracking what was never on sale has to
+    # see those rows too, not just the zone.
+    all_labels = []
+    free_labels = []
     best_run, best_where = 0, ""
     picture = []
     # Every distinct `s` value seen. Only 1 (free) and 2 (taken) are confirmed;
@@ -1080,6 +1086,9 @@ def seat_report(token, zone_rows=None, zone_seats=None, want_map=False, party_si
             status_codes[str(code)] = status_codes.get(str(code), 0) + 1
             is_free = code == 1
             free += is_free
+            all_labels.append(label)
+            if is_free:
+                free_labels.append(label)
             try:
                 number = int(seat.get("displaynumber") or 0)
             except ValueError:
@@ -1157,6 +1166,8 @@ def seat_report(token, zone_rows=None, zone_seats=None, want_map=False, party_si
         # print them. `seats` stays truncated because it is for display.
         "zone_free_labels": zone_names,
         "zone_labels": zone_labels,
+        "all_labels": all_labels,
+        "free_labels": free_labels,
         "zone_rows": [r for r in zone if zone[r]],
         "rows_seen": [r.get("n") for r in seat_rows],
         "party_size": party_size,

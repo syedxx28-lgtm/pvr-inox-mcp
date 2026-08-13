@@ -403,14 +403,45 @@ def cadence(watch, snapshot, state, today):
     return COLD, "nothing due"
 
 
+def seat_row(label):
+    """'E21' -> 'E'. Row names run to two letters in the bigger halls."""
+    return "".join(ch for ch in str(label) if ch.isalpha()).upper()
+
+
+def seat_number(label):
+    """'L10' -> 10. Sorting seats as text puts L10 before L9 and lies about runs."""
+    digits = "".join(ch for ch in str(label) if ch.isdigit())
+    return int(digits) if digits else 0
+
+
+def by_row(labels):
+    """['A1','A2','C7'] -> 'A1-A2 (2), C7'. Reads at a glance on a lock screen."""
+    rows = {}
+    for label in labels:
+        rows.setdefault(seat_row(label), []).append(label)
+    out = []
+    for row in sorted(rows):
+        seats = sorted(rows[row], key=seat_number)
+        if len(seats) <= 2:
+            out.append(", ".join(seats))
+        else:
+            out.append("%s-%s (%d)" % (seats[0], seats[-1], len(seats)))
+    return ", ".join(out)
+
+
 def carry_ever_free(previous, snapshot):
-    """Accumulate, per show, the zone seats ever observed free.
+    """Accumulate, per show, every seat in the hall ever observed free.
 
     PVR uses one code for sold and withheld alike, so the seat map cannot say
     which is which. What it cannot hide is history: a seat that has never once
     been free since we first saw the show was never on sale, and when it does
     come free that is a RELEASE, not a cancellation. Those are the seats worth
     waiting for, and the only way to know them is to have been watching.
+
+    Tracked across the WHOLE hall, not just the zone. The last row is commonly
+    held for VIP requests and released a few hours before the show, and those
+    seats sit outside any centre-block zone - watching only the zone would miss
+    exactly the release most likely to happen.
 
     Kept on the show rather than inside its seat report, so a cycle whose seat
     read failed does not erase the history.
@@ -422,16 +453,26 @@ def carry_ever_free(previous, snapshot):
         for key, show in shows.items():
             was = set((prev_shows.get(key) or {}).get("ever_free") or [])
             report = show.get("seats") or {}
-            show["ever_free"] = sorted(was | set(report.get("zone_free_labels") or []))
+            show["ever_free"] = sorted(was | set(report.get("free_labels") or []))
 
 
 def never_free(show):
-    """Zone seats that have never been observed free. () if not yet known."""
+    """Hall seats never observed free. () if the roster is not known yet."""
     report = show.get("seats") or {}
-    roster = report.get("zone_labels")
+    roster = report.get("all_labels")
     if not roster:
         return ()
     return tuple(sorted(set(roster) - set(show.get("ever_free") or [])))
+
+
+def back_rows(report, depth=2):
+    """The rearmost row names. rows_seen runs front-first, so these are the end.
+
+    The back rows are where a house holds seats back, and where a released seat
+    is worth the most.
+    """
+    seen = (report or {}).get("rows_seen") or []
+    return {str(r).upper() for r in seen[-depth:] if r}
 
 
 def record_opened(state, watch, snapshot):
@@ -509,7 +550,7 @@ def diff(watch, previous, snapshot):
             # it. That is a different event from a cancellation and a better one:
             # releases come in blocks, cancellations come one seat at a time.
             opened_up = sorted(
-                set((show.get("seats") or {}).get("zone_free_labels") or [])
+                set((show.get("seats") or {}).get("free_labels") or [])
                 - set(before.get("ever_free") or [])
             )
             if opened_up:
@@ -610,14 +651,28 @@ def format_alert(watch, events):
             # the seat column.
             lines.append("%-9s %s" % (s["time"], short_seats(s)))
             if ev.get("seats"):
-                # Name them. These went on sale for the first time just now, so
-                # the seat numbers are the whole point of the message.
-                lines.append("%-9s just released: %s" % ("", ", ".join(ev["seats"][:12])))
+                # Name them, grouped by row. These went on sale for the first
+                # time just now, so the seat numbers ARE the message.
+                lines.append("%-9s just released: %s" % ("", by_row(ev["seats"])))
+                report = s.get("seats") or {}
+                zone = set(report.get("zone_labels") or [])
+                rear = back_rows(report)
+                where = []
+                if zone & set(ev["seats"]):
+                    where.append("in your zone")
+                hit = rear & {seat_row(x) for x in ev["seats"]}
+                if hit:
+                    where.append(
+                        "back row%s %s"
+                        % ("" if len(hit) == 1 else "s", ", ".join(sorted(hit)))
+                    )
+                if where:
+                    lines.append("%-9s %s" % ("", " and ".join(where)))
             held = never_free(s)
             if held:
                 lines.append(
-                    "%-9s %d of %d zone seats still never seen free"
-                    % ("", len(held), len((s.get("seats") or {}).get("zone_labels") or []))
+                    "%-9s %d of %d seats in the hall still never seen free"
+                    % ("", len(held), len((s.get("seats") or {}).get("all_labels") or []))
                 )
 
     # A window opening is not the same as your seats being buyable - PVR opens a
