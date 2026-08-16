@@ -81,7 +81,11 @@ def _ntfy(title, body, url, priority=5):
     topic = os.environ.get("NTFY_TOPIC")
     if not topic:
         return False
-    server = os.environ.get("NTFY_SERVER", "https://ntfy.sh").rstrip("/")
+    # `or`, not a get() default: a workflow passing an UNSET secret sets the
+    # variable to an empty string, so the default never fires and every push
+    # goes to "" - which urllib reports as "unknown url type: ''". That silently
+    # ate every alert this watcher sent between 13 and 16 August.
+    server = (os.environ.get("NTFY_SERVER") or "https://ntfy.sh").strip().rstrip("/")
     payload = {
         "topic": topic,
         "title": title,
@@ -136,7 +140,9 @@ def _email(title, body, url, priority=5):
     msg["To"] = to
     msg.set_content(body + (("\n\n" + url) if url else ""))
 
-    with smtplib.SMTP(host, int(os.environ.get("SMTP_PORT", 587)), timeout=30) as smtp:
+    # `or` for the same reason as NTFY_SERVER above - an unset secret arrives as
+    # an empty string, and int("") raises.
+    with smtplib.SMTP(host, int(os.environ.get("SMTP_PORT") or 587), timeout=30) as smtp:
         smtp.starttls()
         smtp.login(user, password)
         smtp.send_message(msg)

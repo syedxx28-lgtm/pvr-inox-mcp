@@ -250,6 +250,39 @@ def poll(watch, today, verbose=False, seats=None, known=None):
 
 HEARTBEAT_KEY = "__heartbeat__"
 HEARTBEAT_HOURS = float(os.environ.get("PVR_HEARTBEAT_HOURS", "6"))
+# How often to say "still here" even when nothing has changed. Silence and
+# breakage are indistinguishable from the outside, and this watcher spent three
+# days sending alerts into a misconfigured URL while looking perfectly healthy.
+ALIVE_HOURS = float(os.environ.get("PVR_ALIVE_HOURS", "6"))
+
+
+def alive_ping(state, lines, dry_run=False):
+    """Low-priority "still watching" note, at most every ALIVE_HOURS.
+
+    Priority 2, so it lands in the notification list without breaking Do Not
+    Disturb - it is reassurance, not an alarm. Only stamps the clock when a
+    channel actually took it, so a broken channel keeps retrying rather than
+    going quiet for another six hours.
+    """
+    beat = state.setdefault(HEARTBEAT_KEY, {})
+    now = core.now_ist()
+
+    last = beat.get("last_ping")
+    if last:
+        since = (now - datetime.datetime.fromisoformat(last)).total_seconds() / 3600.0
+        if since < ALIVE_HOURS:
+            return False
+
+    body = "\n".join(lines) if lines else "No watches enabled."
+    body += "\n\nLast poll %s" % now.strftime("%d %b %H:%M")
+    if dry_run:
+        print("Watcher alive\n%s" % body)
+        return True
+    if not deliver("\U0001F441️ Watcher alive", body, "", 2):
+        print("  alive ping NOT delivered", file=sys.stderr)
+        return False
+    beat["last_ping"] = now.isoformat(timespec="seconds")
+    return True
 
 
 def check_heartbeat(state, answered_total, dry_run=False):
@@ -362,7 +395,15 @@ def cadence(watch, snapshot, state, today):
     opened = (state.get(OPENED_KEY) or {}).get(watch["name"], {})
     now = core.now_ist()
 
+    now_ms = int(now.timestamp() * 1000)
     for date_str in sorted(d for d, v in snapshot.items() if v):
+        # A show already under way cannot be booked, and its seat map stops
+        # answering - which reads as "opened, seats not read yet" and would hold
+        # the run open all evening chasing a screening that has finished.
+        live = [s for s in snapshot[date_str].values() if lead_ok(s, watch, now_ms)]
+        if not live:
+            continue
+
         first = opened.get(date_str)
         days_out = (datetime.date.fromisoformat(date_str) - today).days
         if first and days_out > CHASE_DAYS:
@@ -376,7 +417,7 @@ def cadence(watch, snapshot, state, today):
                 # polls it; it just stops getting the fast cadence.
                 continue
 
-        rated = [s for s in snapshot[date_str].values() if s.get("seats")]
+        rated = [s for s in live if s.get("seats")]
         if not rated:
             if watch.get("seat_detail"):
                 # Opened during a schedule-only cycle. Go and read the seats.
@@ -793,6 +834,7 @@ def run_once(config, state, args, state_path, mode_hint=None):
     blocked = 0
     answered_total = 0
     modes = []
+    alive_lines = []
 
     for watch in config["watches"]:
         if not watch.get("enabled", True):
@@ -838,6 +880,26 @@ def run_once(config, state, args, state_path, mode_hint=None):
         modes.append((mode, "%s - %s" % (watch["name"], reason)))
         print("  cadence: %s - %s" % (mode, reason))
 
+        # One line per watch for the alive ping: what it is looking at, and how
+        # close it is - so the reassurance carries information, not just a pulse.
+        seat_bits = []
+        for date_str in sorted(d for d, v in snapshot.items() if v):
+            best = max(
+                (s.get("seats") or {}).get("best_run", 0)
+                for s in snapshot[date_str].values()
+            )
+            seat_bits.append(
+                "%s %s"
+                % (
+                    datetime.date.fromisoformat(date_str).strftime("%a %-d %b"),
+                    "%d together" % best if best else "nothing in zone",
+                )
+            )
+        alive_lines.append(
+            "%s\n  %s | %s"
+            % (watch["name"], mode, "; ".join(seat_bits) or "not on sale yet")
+        )
+
         # First ever run: record the baseline silently, or every open date
         # would fire as a discovery.
         if first_ever:
@@ -875,6 +937,8 @@ def run_once(config, state, args, state_path, mode_hint=None):
 
     if check_heartbeat(state, answered_total, args.dry_run):
         print("  heartbeat ALERT sent - watch has gone blind", file=sys.stderr)
+    elif answered_total and alive_ping(state, alive_lines, args.dry_run):
+        print("  alive ping sent")
 
     if not args.dry_run:
         with open(state_path, "w") as fh:
