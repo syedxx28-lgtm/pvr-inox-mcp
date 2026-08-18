@@ -293,17 +293,21 @@ def check_heartbeat(state, answered_total, dry_run=False):
     nothing. Silence is not evidence, so absence of a successful poll is
     itself reported.
     """
-    beat = state.get(HEARTBEAT_KEY) or {}
+    # Update the record, never replace it. Rebuilding this dict from two known
+    # keys silently dropped last_ping on every successful poll, which restarted
+    # the alive ping's clock each run and turned a six-hourly reassurance into
+    # one every half hour. Anything else kept here would have gone the same way.
+    beat = state.setdefault(HEARTBEAT_KEY, {})
     now = core.now_ist()
     stamp = now.isoformat(timespec="seconds")
 
     if answered_total:
-        state[HEARTBEAT_KEY] = {"last_success": stamp, "last_alert": beat.get("last_alert")}
+        beat["last_success"] = stamp
         return False
 
     last = beat.get("last_success")
     if not last:
-        state[HEARTBEAT_KEY] = {"last_success": stamp, "last_alert": beat.get("last_alert")}
+        beat["last_success"] = stamp
         return False
 
     quiet_h = (now - datetime.datetime.fromisoformat(last)).total_seconds() / 3600.0
@@ -326,7 +330,6 @@ def check_heartbeat(state, answered_total, dry_run=False):
     else:
         deliver(title, body, "", 5)
     beat["last_alert"] = stamp
-    state[HEARTBEAT_KEY] = beat
     return True
 
 
