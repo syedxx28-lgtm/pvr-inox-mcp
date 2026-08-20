@@ -820,10 +820,10 @@
      ],
      "alternatives": [
       {
-       "best_run": 8,
-       "best_where": "H24-H31",
+       "best_run": 6,
+       "best_where": "H26-H31",
        "depth": 0.5,
-       "free": 13,
+       "free": 11,
        "in_zone": false,
        "row": "H"
       },
@@ -839,7 +839,7 @@
        "best_run": 10,
        "best_where": "J1-J10",
        "depth": 0.35714285714285715,
-       "free": 22,
+       "free": 20,
        "in_zone": false,
        "row": "J"
       },
@@ -847,7 +847,7 @@
        "best_run": 10,
        "best_where": "K1-K10",
        "depth": 0.2857142857142857,
-       "free": 26,
+       "free": 23,
        "in_zone": false,
        "row": "K"
       },
@@ -872,7 +872,7 @@
      "best_where": "F21",
      "cinema": "PVR Palazzo-The Nexus Vijaya Mall",
      "experience": "IMAX",
-     "free": 207,
+     "free": 198,
      "free_labels": [
       "O1",
       "O2",
@@ -1009,9 +1009,6 @@
       "K11",
       "K12",
       "K13",
-      "K19",
-      "K20",
-      "K21",
       "K22",
       "K23",
       "K24",
@@ -1032,8 +1029,6 @@
       "J8",
       "J9",
       "J10",
-      "J20",
-      "J21",
       "J22",
       "J23",
       "J24",
@@ -1066,8 +1061,6 @@
       "H3",
       "H5",
       "H6",
-      "H24",
-      "H25",
       "H26",
       "H27",
       "H28",
@@ -1078,11 +1071,9 @@
       "F2",
       "F21",
       "E1",
-      "D1",
-      "D2",
       "C1"
      ],
-     "free_outside_zone": 206,
+     "free_outside_zone": 197,
      "meets_party_size": false,
      "party_size": 2,
      "rows_seen": [
@@ -1106,8 +1097,8 @@
       "F21"
      ],
      "status_codes": {
-      "1": 207,
-      "2": 235
+      "1": 198,
+      "2": 244
      },
      "total": 442,
      "when": "Sun, 23 Aug, 12:35 PM - 4:08 PM",
@@ -1887,7 +1878,7 @@
  "__heartbeat__": {
   "last_alert": null,
   "last_ping": "2026-08-20T13:18:29+05:30",
-  "last_success": "2026-08-20T16:41:43+05:30"
+  "last_success": "2026-08-20T18:13:03+05:30"
  },
  "__opened__": {
   "The Odyssey - IMAX - PVR Palazzo": {
