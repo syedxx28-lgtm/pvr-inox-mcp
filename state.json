@@ -823,7 +823,7 @@
        "best_run": 10,
        "best_where": "H22-H31",
        "depth": 0.5,
-       "free": 21,
+       "free": 19,
        "in_zone": false,
        "row": "H"
       },
@@ -831,7 +831,7 @@
        "best_run": 10,
        "best_where": "I1-I10",
        "depth": 0.42857142857142855,
-       "free": 28,
+       "free": 22,
        "in_zone": false,
        "row": "I"
       },
@@ -872,7 +872,7 @@
      "best_where": "F20-F21",
      "cinema": "PVR Palazzo-The Nexus Vijaya Mall",
      "experience": "IMAX",
-     "free": 269,
+     "free": 260,
      "free_labels": [
       "O1",
       "O2",
@@ -1066,14 +1066,8 @@
       "I8",
       "I9",
       "I10",
-      "I11",
-      "I12",
       "I13",
       "I14",
-      "I18",
-      "I19",
-      "I20",
-      "I21",
       "I22",
       "I23",
       "I24",
@@ -1093,7 +1087,6 @@
       "H8",
       "H9",
       "H10",
-      "H11",
       "H12",
       "H22",
       "H23",
@@ -1133,8 +1126,6 @@
       "C2",
       "C3",
       "C4",
-      "C5",
-      "C6",
       "C24",
       "C25",
       "C26",
@@ -1144,7 +1135,7 @@
       "C30",
       "C31"
      ],
-     "free_outside_zone": 267,
+     "free_outside_zone": 258,
      "meets_party_size": true,
      "party_size": 2,
      "rows_seen": [
@@ -1169,8 +1160,8 @@
       "F21"
      ],
      "status_codes": {
-      "1": 269,
-      "2": 173
+      "1": 260,
+      "2": 182
      },
      "total": 442,
      "when": "Sun, 23 Aug, 12:35 PM - 4:08 PM",
@@ -1950,8 +1941,8 @@
  },
  "__heartbeat__": {
   "last_alert": null,
-  "last_ping": "2026-08-20T01:15:54+05:30",
-  "last_success": "2026-08-20T05:30:29+05:30"
+  "last_ping": "2026-08-20T07:17:47+05:30",
+  "last_success": "2026-08-20T07:17:47+05:30"
  },
  "__opened__": {
   "The Odyssey - IMAX - PVR Palazzo": {
