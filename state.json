@@ -823,39 +823,39 @@
        "best_run": 4,
        "best_where": "H28-H31",
        "depth": 0.5,
-       "free": 9,
+       "free": 7,
        "in_zone": false,
        "row": "H"
       },
       {
-       "best_run": 8,
-       "best_where": "I1-I8",
+       "best_run": 6,
+       "best_where": "I1-I6",
        "depth": 0.42857142857142855,
-       "free": 15,
+       "free": 10,
        "in_zone": false,
        "row": "I"
       },
       {
-       "best_run": 10,
-       "best_where": "J1-J10",
+       "best_run": 9,
+       "best_where": "J1-J9",
        "depth": 0.35714285714285715,
-       "free": 18,
+       "free": 17,
        "in_zone": false,
        "row": "J"
       },
       {
        "best_run": 10,
-       "best_where": "K1-K10",
+       "best_where": "K22-K31",
        "depth": 0.2857142857142857,
-       "free": 20,
+       "free": 18,
        "in_zone": false,
        "row": "K"
       },
       {
-       "best_run": 11,
-       "best_where": "L11-L21",
+       "best_run": 10,
+       "best_where": "L1-L10",
        "depth": 0.21428571428571427,
-       "free": 31,
+       "free": 29,
        "in_zone": false,
        "row": "L"
       },
@@ -868,11 +868,11 @@
        "row": "M"
       }
      ],
-     "best_run": 1,
-     "best_where": "F21",
+     "best_run": 0,
+     "best_where": "",
      "cinema": "PVR Palazzo-The Nexus Vijaya Mall",
      "experience": "IMAX",
-     "free": 186,
+     "free": 173,
      "free_labels": [
       "O1",
       "O2",
@@ -980,8 +980,6 @@
       "L13",
       "L14",
       "L15",
-      "L16",
-      "L17",
       "L18",
       "L19",
       "L20",
@@ -1004,8 +1002,6 @@
       "K6",
       "K7",
       "K8",
-      "K9",
-      "K10",
       "K22",
       "K23",
       "K24",
@@ -1025,7 +1021,6 @@
       "J7",
       "J8",
       "J9",
-      "J10",
       "J24",
       "J25",
       "J26",
@@ -1040,11 +1035,6 @@
       "I4",
       "I5",
       "I6",
-      "I7",
-      "I8",
-      "I25",
-      "I26",
-      "I27",
       "I28",
       "I29",
       "I30",
@@ -1052,16 +1042,13 @@
       "H1",
       "H2",
       "H3",
-      "H5",
-      "H6",
       "H28",
       "H29",
       "H30",
       "H31",
-      "F21",
       "E1"
      ],
-     "free_outside_zone": 185,
+     "free_outside_zone": 173,
      "meets_party_size": false,
      "party_size": 2,
      "rows_seen": [
@@ -1081,20 +1068,16 @@
       "B",
       "A"
      ],
-     "seats": [
-      "F21"
-     ],
+     "seats": [],
      "status_codes": {
-      "1": 186,
-      "2": 256
+      "1": 173,
+      "2": 269
      },
      "total": 442,
      "when": "Sun, 23 Aug, 12:35 PM - 4:08 PM",
      "widened_to": [],
-     "zone_free": 1,
-     "zone_free_labels": [
-      "F21"
-     ],
+     "zone_free": 0,
+     "zone_free_labels": [],
      "zone_held": 0,
      "zone_labels": [
       "F11",
@@ -1867,7 +1850,7 @@
  "__heartbeat__": {
   "last_alert": null,
   "last_ping": "2026-08-20T19:19:13+05:30",
-  "last_success": "2026-08-20T22:12:06+05:30"
+  "last_success": "2026-08-20T23:43:30+05:30"
  },
  "__opened__": {
   "The Odyssey - IMAX - PVR Palazzo": {
