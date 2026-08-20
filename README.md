@@ -20,6 +20,34 @@ Both sit on `core.py`, which is the actual API client.
 cinemas and other chains are not here, and neither is BookMyShow - it blocks
 automated requests outright.
 
+## Why I built this
+
+The Odyssey had been out for weeks and I still had not seen it. Not for lack of
+tickets, there were always tickets. The seats I wanted were gone, week after
+week.
+
+I was holding out for IMAX, the way Nolan intended, and for Palazzo
+specifically because it has the largest IMAX screen in South India. That is one
+auditorium, AUDI 5, and roughly 44 seats in it worth paying for. Those 44 go
+first. The listing still reads `Available` long after they are gone, because
+400 other seats are still free.
+
+So I stopped reading the listing and defined the seats instead. Rows 60 to 85%
+of the way back, centre block between the aisles, which on AUDI 5 comes out as
+rows F,E,D,C and seats 11-21. The watcher polls, and it tells me nothing at all
+unless a seat inside that block opens.
+
+The second half took longer to work out. PVR does not put a whole auditorium on
+sale at once. Rows are held back and released later, sometimes hours later,
+with no announcement. The seat map cannot tell you this, because a withheld
+seat and a sold seat carry the same code, so there is no flag to read. The only
+way to know is history. A seat never once observed free was never on sale, and
+when it finally appears that is a release, not a cancellation.
+
+Measured on one Palazzo show: 43 of the 44 zone seats were never free across 14
+polls over 16 hours, while 111 to 260 seats sat free elsewhere in the same hall.
+That show was not selling out. It had barely been opened.
+
 ## What it alerts on
 
 | Event | Meaning |
