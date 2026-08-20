@@ -222,6 +222,42 @@ PVR_MCP_PATH=/mcp,PVR_MCP_ALLOWED_HOSTS=<your-run-hostname>,\
 PVR_MAX_CALLS_PER_MIN=60,PVR_BURST=20"
 ```
 
+#### Run TWO services, not one
+
+The watcher cannot call the chain from a GitHub runner - its IP is refused -
+so it borrows this service's IP through the token-gated `/proxy` route. Put
+that on the SAME service you hand out to strangers and the two share an egress
+IP, which means they share a blast radius: a stranger tripping the chain's
+15-minute block takes your 05:26 booking-window watch down with it. The
+`priority` flag exempts the proxy from OUR ceiling, but nothing exempts it from
+an upstream block once the IP is flagged.
+
+So deploy the image twice:
+
+| Service | `PVR_PROXY_TOKEN` | Ceiling | Who uses it |
+|---|---|---|---|
+| `pvr-inox-mcp` | **unset** | on | anyone with the URL |
+| `pvr-inox-proxy` | set | on | the watcher only, unadvertised |
+
+With the token unset, the `/proxy` route answers 404 - the handler disables
+itself, so the public service has no path to lend its IP at all. Point the
+repo's `PVR_PROXY_BASE` secret at the proxy service, and deploy the public one
+without the token:
+
+```bash
+gcloud run deploy pvr-inox-proxy --source . --region=asia-south1 \
+  --allow-unauthenticated \
+  --set-env-vars="PVR_MCP_TRANSPORT=streamable-http,PVR_MCP_HOST=0.0.0.0,\
+PVR_MCP_PATH=/mcp,PVR_MCP_ALLOWED_HOSTS=*,PVR_MAX_CALLS_PER_MIN=30,\
+PVR_BURST=20,PVR_PROXY_TOKEN=<the same token the watcher holds>"
+
+gh secret set PVR_PROXY_BASE --body "https://<proxy-service-url>"
+```
+
+The proxy service still serves `/mcp`, since there is no flag to turn the tools
+off. That is harmless as long as the URL is not advertised, and its ceiling
+covers any stray caller who finds it - the watcher's own traffic is exempt.
+
 #### The ceiling is not optional on a public deployment
 
 `PVR_MIN_INTERVAL` paces upstream calls but never refuses one, so a burst of
