@@ -442,3 +442,11 @@ minutes under load, occasionally skipped. That is fine for catching a booking
 window opening - the listing goes up in a batch and stays up. It will not win a
 seat race measured in seconds. If that matters, move the same script to an
 always-on box on a 30-second loop; nothing in it is Actions-specific.
+
+## Licence
+
+MIT. See [LICENSE](LICENSE). Use it, fork it, host your own, build on it.
+
+The hosted endpoint above is mine and I pay for it, so treat it as a
+convenience rather than a guarantee. If you depend on it, deploy your own
+copy: the whole point of the licence is that you can.
