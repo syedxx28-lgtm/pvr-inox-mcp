@@ -57,6 +57,10 @@ def pvr_fetch_seats(token, watch):
         watch.get("zone_rows"),
         watch.get("zone_seats"),
         party_size=party_of(watch),
+        # Never widen a watch. A standing alert exists to fire on the seats you
+        # actually want; widening into a front row to satisfy the party count
+        # would wake you at 05:26 for seats you would not book.
+        auto_widen=False,
     )
 
 
@@ -66,9 +70,6 @@ def pvr_booking_url(watch, date_str):
         watch.get("cinema_slug", "cinema"),
         watch["cinema_id"],
     )
-
-
-PROVIDERS = {"pvr": (pvr_fetch_day, pvr_booking_url)}
 
 
 # --------------------------------------------------------------------------
@@ -144,7 +145,6 @@ def poll(watch, today, verbose=False, seats=None, known=None):
     Only network failures and blocks count as no answer - that distinction is
     what the heartbeat needs.
     """
-    fetch_day, _ = PROVIDERS[watch.get("provider", "pvr")]
     snapshot = {}
     answered = 0
 
@@ -159,7 +159,7 @@ def poll(watch, today, verbose=False, seats=None, known=None):
         if want_days and date.strftime("%a") not in want_days:
             continue
 
-        shows, err = fetch_day(watch, date_str)
+        shows, err = pvr_fetch_day(watch, date_str)
 
         if err and err.startswith("blocked"):
             # Every further request digs the hole deeper. Abandon this cycle.
@@ -683,7 +683,7 @@ def format_alert(watch, events):
     Returns (title, body, url, priority). The title carries the event and the
     date, because on a lock screen that is often all you read.
     """
-    url = PROVIDERS[watch.get("provider", "pvr")][1](watch, events[0]["date"])
+    url = pvr_booking_url(watch, events[0]["date"])
 
     def pretty(date_str):
         return datetime.date.fromisoformat(date_str).strftime("%a %-d %b")

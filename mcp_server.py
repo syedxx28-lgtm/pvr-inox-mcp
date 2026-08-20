@@ -11,7 +11,9 @@ Run:  python3 mcp_server.py
 
 import base64
 import datetime
+import functools
 import json
+import logging
 import os
 import subprocess
 
@@ -44,11 +46,16 @@ Things that matter when answering:
   own geometry, so it works anywhere - row letters mean different things in
   different houses.
 
-- "NO GOOD SEATS" IS NOT "NO SEATS". The zone is a heuristic and it is often
-  wrong in small or premium halls. When a show reports no good seats, pvr_seats
-  now tells you how many are free outside the zone and which rows have runs big
-  enough for the party, with a ready-made zone_rows to re-call with. Do that
-  before telling anyone a show is unusable. Always pass party_size.
+- THE ZONE WIDENS ITSELF. It is a heuristic and it is often wrong in small or
+  premium halls, so when it cannot seat the party but rows outside it can,
+  pvr_seats widens into the best of those rows and scores them in the SAME
+  call - no second call, no zone_rows to assemble. The seat line says "widened
+  into H,I,J" when that happened, and you should pass that on: the seats are
+  real but they are not the back-centre block. "No good seats" now means the
+  hall genuinely cannot seat the party. Always pass party_size.
+
+- A zone YOU set with zone_rows is treated as an instruction and is never
+  widened. Only the derived default widens.
 
 - LANGUAGE is per SHOW, not per film. One film has many prints (Tamil, 3D
   Tamil, English, 3D English Atmos...) and a single cinema runs several of them
@@ -58,6 +65,12 @@ Things that matter when answering:
   print and exposes `language` (ISO), `variant_id` and the full variant title.
   Filter with language="en". Do NOT judge a film's languages from the block
   title or from the release list in pvr_now_showing; both mislead.
+
+- "WHAT <LANGUAGE> FILMS ARE ON IN <CITY>" is pvr_now_showing(language="en"),
+  one call. It sweeps the city's schedules and returns only films with a real
+  showtime in that language. Without the parameter, now_showing reports RELEASE
+  languages, which its own footer tells you not to trust. Never answer this
+  question by calling pvr_showtimes once per cinema.
 
 - STATE is a derived enum, never the upstream label: ON_SALE, LIMITED (<15%
   free), SOLD_OUT, CLOSED (booking shut, or the show is under way), COMPLETED,
@@ -69,7 +82,9 @@ Things that matter when answering:
   me, 2 together"). It takes party_size (required), a radius, a date range, and
   returns ranked bookable shows with seat blocks and booking links in ONE call.
   It reports which cinemas it did NOT search - never present its results as
-  city-wide coverage.
+  city-wide coverage. count_seats=False turns it into a full-coverage schedule
+  sweep instead, where nothing is skipped but no state is verified; use that
+  for "what is on", and the default for "where can we sit together".
 
 - BOOKING HANDOFF: every bookable show carries `booking_url`, which opens the
   seat-selection screen for that exact show. Give it to the user rather than
@@ -79,6 +94,13 @@ Things that matter when answering:
   CITY_NOT_SERVICED, CINEMA_NOT_FOUND, DATE_IN_PAST, BEYOND_BOOKING_WINDOW,
   SHOW_NOT_BOOKABLE, SHOW_NOT_FOUND, UPSTREAM_ERROR. A past date is DATE_IN_PAST,
   never "not on sale yet" - do not tell anyone to wait for a date that has gone.
+  RATE_LIMITED and UPSTREAM_BLOCKED are load, not answers: say the server is
+  busy and retry once after a few seconds, never report "no shows found".
+
+- FORMAT SEARCHES (IMAX, PXL, 4DX) are handled for you. pvr_find_shows knows
+  which venues have the screens and searches those first, city-wide by default.
+  Do NOT widen radius_km to reach an IMAX - that spends the call budget on
+  ordinary cinemas and makes the format LESS likely to be found.
 
 - "closed" means the date is NOT YET ON SALE, not that it is sold out. The
   chain books roughly 5 days ahead on a rolling window, so a date beyond that
@@ -171,6 +193,41 @@ _LOOKUP = ToolAnnotations(
     readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=True
 )
 
+_usage_log = logging.getLogger("pvr.usage")
+
+
+def _usage(fn):
+    """One INFO line per call, naming the tool and the output format.
+
+    The transport logs only "CallToolRequest", so a public server cannot tell
+    which of its tools earn their place, or whether format="json" is ever
+    actually asked for. This is that record.
+
+    Deliberately nothing else. The arguments carry the caller's own
+    coordinates, and this is a count of what gets used, not a note of who
+    wanted to see which film.
+    """
+    @functools.wraps(fn)
+    def wrapped(*args, **kwargs):
+        _usage_log.info(
+            "tool=%s format=%s",
+            fn.__name__,
+            (kwargs.get("format") or "text").strip().lower(),
+        )
+        try:
+            return fn(*args, **kwargs)
+        except core.RateLimited as exc:
+            return _err("RATE_LIMITED", str(exc))
+        except core.Blocked as exc:
+            return _err("UPSTREAM_BLOCKED", str(exc))
+
+    return wrapped
+
+
+def lookup(fn):
+    """Register a read-only tool, and count it."""
+    return mcp.tool(annotations=_LOOKUP)(_usage(fn))
+
 
 def _err(code, message, **extra):
     """Errors are structurally distinguishable from data.
@@ -216,7 +273,70 @@ def _out(payload, text, fmt):
     return text
 
 
-@mcp.tool(annotations=_LOOKUP)
+_SLOTS = (("Morning", 0, 11), ("Afternoon", 12, 16), ("Evening", 17, 20), ("Night", 21, 23))
+
+
+def _hour24(label):
+    """'07:45 PM' -> 19. None when the time cannot be read."""
+    text = (label or "").strip().upper()
+    try:
+        hour = int(text[:2])
+    except (ValueError, IndexError):
+        return None
+    if "PM" in text and hour != 12:
+        hour += 12
+    elif "AM" in text and hour == 12:
+        hour = 0
+    return hour if 0 <= hour <= 23 else None
+
+
+def _markdown_seats(reports, cinema_id, date, party_size):
+    """B-6, opt-in: film heading, then one table per part of the day.
+
+    Deliberately NOT the default. Server instructions and tool descriptions are
+    advisory - a model paraphrases, reorders and drops them - so returning the
+    assembled markdown is the only lever that makes output format
+    deterministic: format becomes data. But the time-of-day split and this
+    wording are ONE user's taste and this is a public server, so it is asked
+    for rather than imposed. format="json" stays the path for programmatic
+    callers.
+    """
+    if not reports:
+        return "No shows."
+
+    by_film = {}
+    for report in reports:
+        key = report.get("variant_title") or report.get("film") or "Unknown"
+        by_film.setdefault(key, []).append(report)
+
+    out = []
+    for film, rows in by_film.items():
+        out.append("## %s" % film)
+        out.append("")
+        out.append("Cinema %s, %s. Party of %d." % (cinema_id, date, party_size))
+        for name, lo, hi in _SLOTS:
+            slot = [r for r in rows
+                    if _hour24(r.get("time")) is not None
+                    and lo <= _hour24(r.get("time")) <= hi]
+            if not slot:
+                continue
+            out += ["", "### %s" % name, "",
+                    "| Time | Screen | Format | Good seats free | Best block |",
+                    "| --- | --- | --- | --- | --- |"]
+            for r in sorted(slot, key=lambda r: _hour24(r.get("time")) or 0):
+                out.append("| %s | %s | %s | %d | %s |" % (
+                    r.get("time", ""),
+                    r.get("screen") or "-",
+                    (r.get("experience") or r.get("format") or "-").upper(),
+                    r.get("zone_free", 0),
+                    ("%d together at %s" % (r["best_run"], r["best_where"]))
+                    if r.get("best_run") else "none",
+                ))
+        out.append("")
+    return "\n".join(out).rstrip()
+
+
+@lookup
 def pvr_cities(format: str = "text") -> str:
     """Every city where PVR/INOX sells tickets, flagged city vs metro roll-up.
 
@@ -237,7 +357,7 @@ def pvr_cities(format: str = "text") -> str:
     return _out(records, "\n".join(lines), format)
 
 
-@mcp.tool(annotations=_LOOKUP)
+@lookup
 def pvr_cinemas(
     city: str, query: str = "", lat: str = "", lng: str = "", format: str = "text"
 ) -> str:
@@ -270,11 +390,83 @@ def pvr_cinemas(
     return _out(rows, "\n".join(lines), format)
 
 
-@mcp.tool(annotations=_LOOKUP)
+def _now_showing_by_language(city, lat, lng, language, date, fmt):
+    """B-2: films with a real show in `language`, resolved from the schedule.
+
+    Schedule-only, so it covers the whole city rather than its nearest corner -
+    counting seats here would spend the entire budget proving one film
+    bookable while leaving most cinemas unsearched, and the question asked was
+    which films are on, not which seats are free.
+    """
+    shows, meta = core.find_shows(
+        city, lat=lat or None, lng=lng or None, language=language,
+        date=date or None, bookable_only=False, count_seats=False,
+        party_size=1, limit=10000,
+    )
+    if not shows:
+        return _err("SHOW_NOT_FOUND",
+                    "No %s show found in %s on %s." % (language, city, meta["dates"][0]),
+                    searched=meta["cinemas_searched"], not_searched=meta["cinemas_skipped"])
+
+    films = {}
+    for show in shows:
+        row = films.setdefault(show["film"], {
+            "film": show["film"], "title": show["title"],
+            "language": show["language"], "shows": 0,
+            "cinemas": set(), "formats": set(), "times": [],
+        })
+        row["shows"] += 1
+        row["cinemas"].add(show["cinema"])
+        if show.get("experience"):
+            row["formats"].add(show["experience"])
+        row["times"].append(show["time"])
+
+    rows = sorted(films.values(), key=lambda r: -r["shows"])
+    for row in rows:
+        row["cinemas"] = sorted(row["cinemas"])
+        row["formats"] = sorted(row["formats"])
+
+    width = max([len(r["film"]) for r in rows] + [24])
+    lines = ["%-*s %-6s %-7s %s" % (width, "FILM", "SHOWS", "VENUES", "FORMATS"),
+             "-" * (width + 30)]
+    for row in rows:
+        lines.append("%-*s %-6d %-7d %s"
+                     % (width, row["film"], row["shows"], len(row["cinemas"]),
+                        ", ".join(row["formats"]) or "-"))
+    lines.append("")
+    lines.append("%s shows on %s, resolved from the schedule - these are real "
+                 "%s showtimes, not release languages."
+                 % (language, meta["dates"][0], language))
+    lines.append("Searched %d cinema(s) in %d call(s)."
+                 % (len(meta["cinemas_searched"]), meta["calls"]))
+    if meta["cinemas_skipped"]:
+        lines.append("NOT searched: %s" % ", ".join(meta["cinemas_skipped"]))
+    return _out(rows, "\n".join(lines), fmt)
+
+
+@lookup
 def pvr_now_showing(
-    city: str, lat: str = "", lng: str = "", format: str = "text"
+    city: str, lat: str = "", lng: str = "", language: str = "",
+    date: str = "", format: str = "text"
 ) -> str:
-    """Films currently playing in a city, with certificate, length and formats."""
+    """Films currently playing in a city, with certificate, length and formats.
+
+    language filters on the SCHEDULE, not on the release list. Without it this
+    is one cheap call reporting what each film was RELEASED in - which its own
+    footer tells you not to trust, because a film released in English may have
+    zero English showtimes here. With it, the city's schedules are swept and
+    only films with a real show in that language come back, with the count.
+
+    That sweep is the expensive path: "what English films are on in Chennai"
+    used to take 10 calls, because there was no cheap route to a filtered
+    answer, only an ad-hoc one. Prefer language="en" over doing the sweep by
+    hand with pvr_showtimes.
+
+    date defaults to today and only applies to a language-filtered search.
+    """
+    if language:
+        return _now_showing_by_language(city, lat, lng, language, date, format)
+
     films = core.now_showing(city, lat or None, lng or None)
     if not films:
         return "Nothing showing in %s." % city
@@ -307,7 +499,7 @@ def pvr_now_showing(
     return _out(films, "\n".join(lines), format)
 
 
-@mcp.tool(annotations=_LOOKUP)
+@lookup
 def pvr_showtimes(
     city: str,
     cinema_id: str,
@@ -422,7 +614,7 @@ def pvr_showtimes(
     return _out(shows, "\n".join(lines), format)
 
 
-@mcp.tool(annotations=_LOOKUP)
+@lookup
 def pvr_seats(
     city: str,
     cinema_id: str,
@@ -437,6 +629,7 @@ def pvr_seats(
     lat: str = "",
     lng: str = "",
     format: str = "text",
+    style: str = "plain",
 ) -> str:
     """Live seat availability, with the good seats counted separately.
 
@@ -447,22 +640,29 @@ def pvr_seats(
     party_size: how many seats you need TOGETHER. Availability is judged against
       this - "1 seat free" is not a result for a party of 2.
 
-    THE ZONE IS A HEURISTIC, AND WIDENING IT IS THE FIX. The default zone is the
-    back-centre block. When it cannot seat the party, the response reports how
-    many seats are free OUTSIDE it and names the rows, e.g.
+    THE ZONE IS A HEURISTIC AND IT WIDENS ITSELF. The default zone is the
+    back-centre block. When that cannot seat the party but rows outside it can,
+    this widens into the best of those rows automatically and scores them, in
+    the same call. The line says so:
 
-        no good seats (0 free in zone, 97% booked overall)
-        zone covered rows F,E,D,C (0 free); 15 more free seats OUTSIDE it
-        seats 2+ together elsewhere: N (2 together at N3-N4), O (9 at O21-O29)
-        -> widen with zone_rows="F,E,D,C,N,O"
+        GOOD SEATS: 10 together at J1-J10 (46 free in zone, 78% booked
+        overall, widened into H,I,J)
 
-    Re-call with that zone_rows to get those blocks scored. Never report "no
-    seats" to a user on the strength of the default zone alone.
+    So "no good seats" now means the hall genuinely cannot seat the party, not
+    that the default zone was too narrow. You do not need to re-call.
+
+    Every row also carries `screen`, `language` and the variant title, so a
+    seats answer needs no follow-up pvr_showtimes call to say which auditorium
+    and which print a show is.
 
     zone_rows: comma-separated row letters to override the auto zone ("F,E,D,C").
+               An explicit zone is treated as an instruction and is NOT widened
+               - only the derived default widens itself.
     zone_seats: "11-21" to override the seat-number range.
     seat_map: include an ASCII map. O = free in zone, x = taken in zone,
               o = free outside it, . = taken outside it.
+    style: "plain" (default) or "markdown" for a rendered heading and
+           time-of-day tables. Cosmetic only - the data is identical.
     """
     bad = _validate(city, cinema_id, date)
     if bad:
@@ -503,6 +703,7 @@ def pvr_seats(
         except ValueError:
             return "zone_seats should look like '11-21'."
 
+    need = max(1, party_size)
     results, lines = [], []
     for show in shows[:12]:
         report, seat_err = core.seat_report(
@@ -513,68 +714,76 @@ def pvr_seats(
         if seat_err:
             lines.append("%-9s %s" % (show["time"], seat_err))
             continue
+        # B-1: carry the show's own identity onto the seat row. Without these a
+        # caller had to make a second pvr_showtimes call and join on the
+        # timestamp just to say which screen and which print - six times in one
+        # session, for the commonest question this server gets.
         report["film"] = show["film"]
         report["time"] = show["time"]
         report["status"] = show["status"]
+        report["screen"] = show.get("screen") or ""
+        report["language"] = show.get("language") or ""
+        report["language_name"] = show.get("language_name") or ""
+        report["variant_id"] = show.get("variant_id")
+        report["variant_title"] = show.get("film") or ""
+        report["title"] = show.get("title") or ""
+        report["format"] = show.get("format") or ""
+        report["formats"] = show.get("formats") or []
+        report["booking_url"] = show.get("booking_url")
         results.append(report)
 
-        need = max(1, party_size)
         state, _ = core.show_status(show, report)
+        report["state"] = state
         lines.append(
-            "%-9s %-8s %-10s %s"
-            % (show["time"], show["experience"] or "-", state, core.describe_seats(report))
+            "%-9s %-6s %-8s %-3s %-9s %s"
+            % (show["time"], show["experience"] or "-", show.get("screen") or "-",
+               show.get("language") or "-", state, core.describe_seats(report))
         )
         if show.get("booking_url") and state in core.BOOKABLE:
             lines.append("   book: %s" % show["booking_url"])
 
-        # R-P0-4a: the zone is a heuristic. When it cannot seat the party, say
-        # what the zone covered, what exists outside it, and how to widen it -
-        # rather than reporting "no good seats" while 15 sit one row away.
+        # B-3: the zone widens itself now, so reaching here means the widening
+        # was tried and the hall still cannot seat the party - a real verdict
+        # rather than an artefact of a narrow default. Say which rows were
+        # considered, so "no seats" is auditable.
         if not report["meets_party_size"]:
             lines.append(
-                "   zone covered rows %s (%d free); %d more free seats OUTSIDE it"
+                "   no %d adjacent seats anywhere in this hall - zone was %s%s, "
+                "%d free seats outside it but none %d together"
                 % (
+                    need,
                     ",".join(report["zone_rows"]) or "-",
-                    report["zone_free"],
+                    (" after widening into %s" % ",".join(report["widened_to"]))
+                    if report["widened_to"] else "",
                     report["free_outside_zone"],
+                    need,
                 )
             )
-            alts = [a for a in report["alternatives"] if a["best_run"] >= need]
-            if alts:
-                shown = ", ".join(
-                    "%s (%d together at %s)" % (a["row"], a["best_run"], a["best_where"])
-                    for a in alts[:3]
-                )
-                lines.append("   seats %d+ together elsewhere: %s" % (need, shown))
-                lines.append(
-                    '   -> widen with zone_rows="%s"'
-                    % ",".join(
-                        dict.fromkeys(report["zone_rows"] + [a["row"] for a in alts[:3]])
-                    )
-                )
-            else:
-                lines.append("   no %d adjacent seats anywhere in this hall" % need)
         if seat_map:
             lines.append("   zone rows: %s" % ", ".join(report["zone_rows"]))
             lines += ["   " + line for line in report.get("map", [])]
             lines.append("")
 
-    header = "%s - cinema %s - %s\n%s" % (
+    if style.strip().lower() == "markdown":
+        return _out(results, _markdown_seats(results, cinema_id, date, need), format)
+
+    header = "%s - cinema %s - %s\n%-9s %-6s %-8s %-3s %-9s %s\n%s" % (
         film or "all films",
         cinema_id,
         date,
-        "-" * 92,
+        "TIME", "EXP", "SCREEN", "LNG", "STATE", "SEATS",
+        "-" * 96,
     )
     return _out(results, header + "\n" + "\n".join(lines), format)
 
 
-@mcp.tool(annotations=_LOOKUP)
+@lookup
 def pvr_find_shows(
     city: str,
     party_size: int,
     lat: str = "",
     lng: str = "",
-    radius_km: float = 6.0,
+    radius_km: float = 0,
     film: str = "",
     language: str = "",
     experience: str = "",
@@ -585,6 +794,7 @@ def pvr_find_shows(
     bookable_only: bool = True,
     sort: str = "relevance",
     limit: int = 20,
+    count_seats: bool = True,
     format: str = "text",
 ) -> str:
     """Answer a whole constrained query in one call: what can I actually book?
@@ -599,6 +809,17 @@ def pvr_find_shows(
 
     date_to searches a range - ask for tonight and tomorrow in one call.
 
+    count_seats=True (default) is the "can I book this" mode: seats are counted
+    for the shortlist, at one request per show, which is what limits how many
+    cinemas a search can reach. count_seats=False is the wide sweep - schedule
+    only, every cinema in radius covered, and every state openly unverified.
+    Use False for "what is on", True for "where can we sit together".
+
+    radius_km defaults to 6 km, or to the whole city when `experience` is set,
+    since a city may hold one IMAX screen and it is wherever it is. Venues that
+    can run the requested format are searched first, so do NOT widen the radius
+    to reach a format - that spends the budget on ordinary cinemas.
+
     On zero results it relaxes constraints in order (seat block -> radius ->
     time window) and says what it relaxed. Film and language are never relaxed.
     """
@@ -610,11 +831,13 @@ def pvr_find_shows(
         return bad
 
     def run(**over):
-        args = dict(city=city, lat=lat or None, lng=lng or None, radius_km=radius_km,
+        args = dict(city=city, lat=lat or None, lng=lng or None,
+                    radius_km=radius_km or None,
                     film=film or None, language=language or None,
                     experience=experience or None, date=date or None,
                     date_to=date_to or None, time_from=time_from or None,
                     time_to=time_to or None, party_size=party_size,
+                    count_seats=count_seats,
                     bookable_only=bookable_only, sort=sort, limit=limit)
         args.update(over)
         return core.find_shows(**args)
@@ -690,7 +913,7 @@ def pvr_find_shows(
     return _out({"results": results, "meta": meta}, "\n".join(lines), format)
 
 
-@mcp.tool(annotations=_LOOKUP)
+@lookup
 def pvr_screens(city: str = "", cinema_id: str = "", format: str = "text") -> str:
     """Screen sizes for a cinema - seat count and size class per auditorium.
 
@@ -714,7 +937,7 @@ def pvr_screens(city: str = "", cinema_id: str = "", format: str = "text") -> st
     return _out(rows, "\n".join(lines), format)
 
 
-@mcp.tool(annotations=_LOOKUP)
+@lookup
 def pvr_is_open(
     city: str, cinema_id: str, date: str, lat: str = "", lng: str = ""
 ) -> str:
@@ -839,7 +1062,6 @@ def pvr_add_watch(
     watch = {
         "name": name,
         "enabled": True,
-        "provider": "pvr",
         "city": city,
         "cinema_id": venue["cinema_id"],
         "cinema_slug": venue["name"].replace(" ", "-"),
@@ -997,7 +1219,10 @@ async def _proxy(request):
         return JSONResponse({"error": "bad_json"}, status_code=400)
 
     try:
-        data = core._post(path, body, request.headers.get("x-city", "Chennai"))
+        # priority: this is the token holder's own watcher, and starving it
+        # under public load is the outage the ceiling exists to prevent.
+        data = core._post(path, body, request.headers.get("x-city", "Chennai"),
+                          priority=True)
     except core.Blocked as exc:
         return JSONResponse({"error": "blocked", "detail": str(exc)}, status_code=429)
     except Exception as exc:
@@ -1036,6 +1261,10 @@ def main():
     if transport == "stdio":
         mcp.run()
         return
+
+    # Served publicly, so stderr is where the usage record goes. Cloud Run and
+    # friends capture it, which makes basicConfig the whole analytics stack.
+    logging.basicConfig(level=logging.INFO)
 
     # Cloud Run and most PaaS inject PORT and require binding 0.0.0.0.
     mcp.settings.host = os.environ.get("PVR_MCP_HOST", "127.0.0.1")

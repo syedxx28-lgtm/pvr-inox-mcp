@@ -113,7 +113,6 @@ direct avoids that entirely.
  "watches": [
   {
    "name": "The Odyssey - IMAX - PVR Palazzo",
-   "provider": "pvr",
    "city": "Chennai",
    "cinema_id": "388",
    "cinema_slug": "PVR-Palazzo-The-Nexus-Vijaya-Mall",
@@ -219,8 +218,25 @@ Deployed to Cloud Run (`asia-south1`, close to the origin), scale-to-zero:
 gcloud run deploy pvr-inox-mcp --source . --region=asia-south1 \
   --allow-unauthenticated \
   --set-env-vars="PVR_MCP_TRANSPORT=streamable-http,PVR_MCP_HOST=0.0.0.0,\
-PVR_MCP_PATH=/mcp,PVR_MCP_ALLOWED_HOSTS=<your-run-hostname>"
+PVR_MCP_PATH=/mcp,PVR_MCP_ALLOWED_HOSTS=<your-run-hostname>,\
+PVR_MAX_CALLS_PER_MIN=60,PVR_BURST=20"
 ```
+
+#### The ceiling is not optional on a public deployment
+
+`PVR_MIN_INTERVAL` paces upstream calls but never refuses one, so a burst of
+callers queues and the whole queue still arrives - and the chain answers that
+by blocking the IP for 15 minutes. Every user of a hosted instance shares ONE
+egress IP, so popularity and an outage are the same event without a ceiling.
+
+`PVR_MAX_CALLS_PER_MIN` (0 = off, the default) caps upstream calls per process
+and sheds the excess as `ERROR RATE_LIMITED`, which is cheap to retry.
+`PVR_BURST` is how much slack it allows first. The token-gated `/proxy` path is
+exempt: that is the operator's own watcher, and starving it is the exact
+failure the ceiling exists to prevent.
+
+Leave it off for local stdio use and for the cron watcher - both are a single
+known caller.
 
 `PVR_MCP_ALLOWED_HOSTS` is required, and for a public connector it should be
 `*`. MCP enables DNS-rebinding protection by default, which checks **two**

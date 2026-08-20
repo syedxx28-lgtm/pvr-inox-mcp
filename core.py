@@ -96,12 +96,36 @@ _last_call = [0.0]
 _blocked_until = [0.0]
 _throttle = threading.Lock()
 
+# Load shedding, which is a different job from pacing. MIN_INTERVAL delays a
+# call but never refuses one, so N concurrent callers queue up and the whole
+# queue still arrives upstream - which then blocks the IP for BLOCK_COOLDOWN.
+# On a public deployment every caller shares ONE egress IP, so the ceiling has
+# to be global to the process, and it has to refuse rather than wait.
+#
+# Off by default: the cron watcher and local stdio use are a single known
+# caller and should never be capped. The hosted service sets the env var.
+MAX_CALLS_PER_MIN = float(os.environ.get("PVR_MAX_CALLS_PER_MIN", "0"))
+BURST = float(os.environ.get("PVR_BURST", "20"))
+_tokens = [BURST]
+_refilled = [0.0]
+
 
 class Blocked(Exception):
     """Upstream is refusing us. Back off; do not retry in a loop."""
 
 
-def _pace():
+class RateLimited(Exception):
+    """OUR ceiling, hit before the upstream's. Cheap to retry shortly."""
+
+
+def _pace(priority=False):
+    """Pace, and on a public deployment shed load above the ceiling.
+
+    `priority` exempts a caller from the ceiling but not from pacing or from a
+    live block. It is for the token-gated proxy: that traffic is the operator's
+    own watcher, and starving it is the exact outage the ceiling exists to
+    prevent.
+    """
     with _throttle:
         now = time.monotonic()
         if now < _blocked_until[0]:
@@ -109,6 +133,22 @@ def _pace():
                 "upstream returned 403/429; cooling off for %d more seconds"
                 % int(_blocked_until[0] - now)
             )
+
+        if MAX_CALLS_PER_MIN > 0 and not priority:
+            # Refill first, so the very first call does not start empty.
+            _tokens[0] = min(
+                BURST,
+                _tokens[0] + (now - (_refilled[0] or now)) * MAX_CALLS_PER_MIN / 60.0,
+            )
+            _refilled[0] = now
+            if _tokens[0] < 1:
+                raise RateLimited(
+                    "this server is capped at %d upstream calls a minute and is "
+                    "at its ceiling; try again in a few seconds"
+                    % int(MAX_CALLS_PER_MIN)
+                )
+            _tokens[0] -= 1
+
         wait = MIN_INTERVAL - (now - _last_call[0])
         if wait > 0:
             time.sleep(wait)
@@ -125,8 +165,8 @@ def _proxy_target():
     return (base, token) if (base and token) else (None, None)
 
 
-def _post(path, body, city="Chennai", timeout=30):
-    _pace()
+def _post(path, body, city="Chennai", timeout=30, priority=False):
+    _pace(priority)
     base, token = _proxy_target()
     if base:
         req = urllib.request.Request(
@@ -352,6 +392,17 @@ def list_cinemas(city, lat=None, lng=None, query=""):
                     "lat": node.get("latitude"),
                     "lng": node.get("longitude"),
                     "shows": node.get("showCount", 0),
+                    # Which formats the VENUE can run, straight from its screen
+                    # list - IMAX, 4DX, Premium and so on. This costs nothing:
+                    # the payload already carried it and we used to discard it.
+                    # It is what lets a format search skip the venues that
+                    # cannot possibly answer, instead of paying for their
+                    # schedules first and filtering after.
+                    "formats": sorted({
+                        (s.get("screenType") or "").strip().upper()
+                        for s in (node.get("screens") or {}).values()
+                        if isinstance(s, dict) and s.get("screenType")
+                    }),
                 }
             for value in node.values():
                 walk(value)
@@ -630,109 +681,10 @@ def day_sessions(city, cinema_id, date, lat=None, lng=None):
     return sorted(shows, key=lambda s: s["ts"]), None
 
 
-# The multi-cinema endpoint answers for everything within ~4-5 km of the
-# coordinates it is given (measured: included max 3.7 km, excluded min 5.3 km).
-# So a city is covered by a few anchor calls rather than one call per cinema -
-# 16 Chennai venues collapse to ~5 requests, which is what makes a solver
-# affordable against an upstream that blocks heavy callers (D22).
-ANCHOR_RADIUS_KM = 4.0
-
-
-def _anchor_set(cinemas, radius_km=ANCHOR_RADIUS_KM, cap=8):
-    """Fewest anchor cinemas covering the rest. Returns (anchors, unreachable).
-
-    Greedy set cover over an explicit uncovered set, so an anchor always covers
-    itself and the loop cannot stall.
-    """
-    placed = [c for c in cinemas if c.get("lat") and c.get("lng")]
-    unreachable = [c for c in cinemas if not (c.get("lat") and c.get("lng"))]
-
-    def covers(anchor):
-        return {
-            o["cinema_id"] for o in placed
-            if (haversine_km(anchor["lat"], anchor["lng"], o["lat"], o["lng"]) or 999)
-            <= radius_km
-        }
-
-    uncovered = {c["cinema_id"] for c in placed}
-    anchors = []
-    while uncovered and len(anchors) < cap:
-        best, best_gain = None, set()
-        for candidate in placed:
-            gain = covers(candidate) & uncovered
-            if len(gain) > len(best_gain):
-                best, best_gain = candidate, gain
-        if not best:
-            break
-        anchors.append(best)
-        uncovered -= best_gain
-
-    unreachable += [c for c in placed if c["cinema_id"] in uncovered]
-    return anchors, unreachable
-
-
-def sessions_near(city, anchor, date, variants=None):
-    """Every cinema's schedule within the anchor's radius - ONE request."""
-    body = {
-        "city": city,
-        "cinemaId": str(anchor["cinema_id"]),  # must be a real id; "" returns nothing
-        "dated": date,
-        "filters": [],
-        "lat": str(anchor["lat"]),
-        "lng": str(anchor["lng"]),
-    }
-    try:
-        payload = _post("content/cinemasessions", body, city)
-    except Blocked as exc:
-        return None, "blocked: %s" % exc
-    except Exception as exc:
-        return None, "error %s" % exc
-    if payload.get("status") != 302 or not payload.get("output"):
-        return [], None
-
-    variants = variants if variants is not None else film_variants(city)
-    shows = []
-    for block in payload["output"].get("showTimeSessions") or []:
-        cinema = block.get("cinemaRe") or {}
-        for movie in block.get("cinemaMovieSessions") or []:
-            movie_re = movie.get("movieRe") or {}
-            block_title = movie_re.get("filmName", "")
-            for exp in movie.get("experienceSessions") or []:
-                for show in exp.get("shows") or []:
-                    variant = variants.get(str(show.get("movieId"))) or {}
-                    film = variant.get("name") or block_title
-                    parsed = parse_title(film)
-                    code = lang_code(show.get("language")) or lang_code(variant.get("language"))
-                    shows.append({
-                        "cinema_id": cinema.get("theatreId"),
-                        "cinema": cinema.get("name", ""),
-                        "cinema_lat": cinema.get("latitude"),
-                        "cinema_lng": cinema.get("longitude"),
-                        "film": film,
-                        "title": movie_re.get("n") or parsed["title"],
-                        "canonical_film_id": movie_re.get("id"),
-                        "variant_id": show.get("movieId"),
-                        "language": code or parsed["language"],
-                        "subtitle_language": parsed["subtitle_language"],
-                        "formats": parsed["formats"],
-                        "experience": exp.get("experienceKey", ""),
-                        "date": show.get("showDate"),
-                        "time": show.get("showTime"),
-                        "ts": show.get("showTimeStamp") or 0,
-                        "ends_ts": show.get("endTimeStamp") or 0,
-                        "screen": show.get("screenName", ""),
-                        "status": show.get("statusTxt", ""),
-                        "token": show.get("encrypted", ""),
-                        "booking_url": ("https://www.pvrcinemas.com/seatlayout/%s"
-                                        % show["encrypted"]) if show.get("encrypted") else None,
-                    })
-    return shows, None
-
-
-def find_shows(city, lat=None, lng=None, radius_km=6.0, film=None, language=None,
+def find_shows(city, lat=None, lng=None, radius_km=None, film=None, language=None,
                experience=None, date=None, date_to=None, time_from=None, time_to=None,
                party_size=1, bookable_only=True, sort="relevance", limit=20,
-               seat_budget=12, call_budget=10):
+               seat_budget=12, call_budget=10, count_seats=True):
     """The solver. Returns (results, meta).
 
     Radius-first by design. One request answers for every cinema within ~4-5 km
@@ -744,8 +696,22 @@ def find_shows(city, lat=None, lng=None, radius_km=6.0, film=None, language=None
     Seat maps cost one request each, so they are fetched only for the best
     candidates after ranking, and only when party_size or seat detail matters.
     """
+    # Two reasons to start city-wide instead of at the 6 km "near me" default.
+    #
+    # A premium format is a CITY-level resource, not a neighbourhood one: a city
+    # may hold exactly one IMAX screen and it is wherever it is. A radius tuned
+    # for "near me" quietly excludes it.
+    #
+    # And with no caller coordinates the origin falls back to the city's own
+    # published centre, which is a notional point rather than anywhere a person
+    # is - Chennai's has NO cinema inside 6 km of it, so the simplest possible
+    # call, find_shows("Chennai", party_size=2), answered NOTHING_IN_RADIUS.
+    # Someone who passed no position meant the city, not a point in it.
+    if radius_km is None:
+        radius_km = 6.0 if (lat and lng and not experience) else 60.0
+
     meta = {"calls": 0, "cinemas_searched": [], "cinemas_skipped": [],
-            "dates": [], "relaxed": {}, "notes": []}
+            "dates": [], "relaxed": {}, "notes": [], "radius_km": radius_km}
 
     centre = (lat, lng) if (lat and lng) else city_coords(city)
     if not centre:
@@ -768,6 +734,24 @@ def find_shows(city, lat=None, lng=None, radius_km=6.0, film=None, language=None
             for i in range((end - start).days + 1)]
     meta["dates"] = days
 
+    # B-4/B-5. Counting seats is what costs the budget: one request per show,
+    # on top of one per cinema per day. So the choice of which tool is the
+    # "can I actually book this" tool is really a choice about coverage, and
+    # trying to be both is how a city-wide search ended up covering 8 of 16
+    # cinemas with everything past the first dozen rows marked ON_SALE? - the
+    # uncounted state being the common case in the broadest tool.
+    #
+    # count_seats=False is the honest other half: schedule only, one call per
+    # cinema per day, budget raised to cover EVERY cinema in radius, and every
+    # result openly unverified.
+    if not count_seats:
+        seat_budget = 0
+        call_budget = max(call_budget, len(in_range) * len(days) + 1)
+        meta["notes"].append(
+            "schedule-only search: full coverage, but seats were NOT counted, "
+            "so every state is unverified - re-check one with pvr_seats before "
+            "telling anyone it is bookable")
+
     variants = film_variants(city, centre[0], centre[1])
     seen, shows = set(), []
 
@@ -781,13 +765,40 @@ def find_shows(city, lat=None, lng=None, radius_km=6.0, film=None, language=None
         in_range,
         key=lambda c: haversine_km(centre[0], centre[1], c.get("lat"), c.get("lng")) or 9e9,
     )
+
+    # Capability first, distance second. Choosing venues by distance alone and
+    # applying `experience` only to the shows that come back is how an IMAX
+    # search returns nothing while the city's IMAX house sits one slot outside
+    # the budget - and widening radius_km makes it WORSE, because the venues it
+    # adds are ordinary ones competing for the same calls.
+    #
+    # Demoted, never dropped: screenType is the chain's vocabulary, not ours, so
+    # a format we fail to recognise must not silently empty the search.
+    if experience:
+        want = experience.strip().upper()
+        able_ids = {c["cinema_id"] for c in nearest if want in (c.get("formats") or [])}
+        if able_ids:
+            nearest = ([c for c in nearest if c["cinema_id"] in able_ids]
+                       + [c for c in nearest if c["cinema_id"] not in able_ids])
+            meta["notes"].append(
+                "%d of %d venues in radius can run %s; searched those first"
+                % (len(able_ids), len(nearest), want.lower()))
+        else:
+            meta["notes"].append(
+                "no venue in radius advertises %s, so this searched by distance "
+                "instead - the chain may name that format differently"
+                % want.lower())
+
     per_day = max(1, (call_budget - 1) // max(1, len(days)))
     searched = nearest[:per_day]
     if len(searched) < len(nearest):
         meta["cinemas_skipped"] += [c["name"] for c in nearest[len(searched):]]
         meta["notes"].append(
-            "searched the %d nearest of %d cinemas in radius; raise call_budget "
-            "or narrow radius_km to change that" % (len(searched), len(nearest)))
+            "searched %d of %d cinemas in radius, %s first; raise call_budget "
+            "or narrow radius_km to change that"
+            % (len(searched), len(nearest),
+               "the ones that can run " + experience.strip().lower()
+               if experience else "nearest"))
 
     for day in days:
         for place in searched:
@@ -1029,44 +1040,16 @@ def _row_runs(row, free_only=True):
     return [(r[0], r[-1], len(r)) for r in runs]
 
 
-def seat_report(token, zone_rows=None, zone_seats=None, want_map=False, party_size=1):
-    """Seat availability for one session. Returns (report, error).
+def _score_zone(seat_rows, zone, party_size):
+    """Count one hall against one zone definition. Pure arithmetic, no requests.
 
-    s == 1 is free, s == 2 is taken - verified against the rendered seat map.
+    Split out so a hall can be scored MORE THAN ONCE from the same payload -
+    which is what lets auto-widening re-judge a bigger zone without going back
+    upstream for a seat map it already has.
     """
-    try:
-        payload = _post("ticketing/seatlayout", {"encrypted": token})
-    except Blocked as exc:
-        return None, "blocked: %s" % exc
-    except Exception as exc:
-        return None, "seatmap %s" % exc
-
-    if payload.get("status") != 200 or not payload.get("output"):
-        return None, "seatmap unavailable"
-
-    output = payload["output"]
-    seat_rows = [r for r in output.get("rows") or [] if r.get("t") == "seats"]
-    zone = resolve_zone(seat_rows, zone_rows, zone_seats)
-
-    total = free = zone_total = zone_free = zone_held = 0
-    zone_names = []
-    # Every seat in the zone, free or not. A caller tracking which seats have
-    # EVER been free needs the roster, not just today's survivors: PVR marks a
-    # withheld seat with the same code as a sold one (only 1 and 2 are ever
-    # seen), so "never once free" is the only way to tell the two apart.
-    zone_labels = []
-    # The same rosters for the WHOLE hall. Houses hold back more than the centre
-    # block - the last row is commonly kept for VIP requests and released a few
-    # hours before the show - and a caller tracking what was never on sale has to
-    # see those rows too, not just the zone.
-    all_labels = []
-    free_labels = []
-    best_run, best_where = 0, ""
-    picture = []
-    # Every distinct `s` value seen. Only 1 (free) and 2 (taken) are confirmed;
-    # a date that opens with rows withheld has to be showing SOMETHING else, and
-    # this is how we find out what. Cheap enough to always collect.
-    status_codes = {}
+    out = {"total": 0, "free": 0, "zone_total": 0, "zone_free": 0, "zone_held": 0,
+           "zone_names": [], "zone_labels": [], "all_labels": [], "free_labels": [],
+           "best_run": 0, "best_where": "", "picture": [], "status_codes": {}}
 
     for row in seat_rows:
         name = row.get("n")
@@ -1081,14 +1064,14 @@ def seat_report(token, zone_rows=None, zone_seats=None, want_map=False, party_si
                 run = []
                 continue
 
-            total += 1
+            out["total"] += 1
             code = seat.get("s")
-            status_codes[str(code)] = status_codes.get(str(code), 0) + 1
+            out["status_codes"][str(code)] = out["status_codes"].get(str(code), 0) + 1
             is_free = code == 1
-            free += is_free
-            all_labels.append(label)
+            out["free"] += is_free
+            out["all_labels"].append(label)
             if is_free:
-                free_labels.append(label)
+                out["free_labels"].append(label)
             try:
                 number = int(seat.get("displaynumber") or 0)
             except ValueError:
@@ -1096,88 +1079,152 @@ def seat_report(token, zone_rows=None, zone_seats=None, want_map=False, party_si
 
             if number not in allowed:
                 glyphs += "o" if is_free else "."
-                run = []  # outside the zone, so a run can't straddle the edge
+                run = []  # outside the zone, so a run can\'t straddle the edge
                 continue
 
-            zone_total += 1
-            zone_labels.append(label)
+            out["zone_total"] += 1
+            out["zone_labels"].append(label)
             glyphs += "O" if is_free else "x"
             if is_free:
-                zone_free += 1
-                zone_names.append(label)
+                out["zone_free"] += 1
+                out["zone_names"].append(label)
                 run.append(label)
-                if len(run) > best_run:
-                    best_run = len(run)
-                    best_where = _span(run)
+                if len(run) > out["best_run"]:
+                    out["best_run"] = len(run)
+                    out["best_where"] = _span(run)
             else:
                 # 2 is sold. Anything else is the house withholding the seat -
                 # a hold released later reads as newly free, which is a
                 # different thing to wait for than someone cancelling.
                 if code != 2:
-                    zone_held += 1
+                    out["zone_held"] += 1
                 run = []
 
-        picture.append("%-3s %s" % (name, glyphs))
+        out["picture"].append("%-3s %s" % (name, glyphs))
+    return out
 
-    # Every row's free runs, so the caller can be told what exists OUTSIDE the
-    # zone. The zone is a heuristic; when it comes up short the answer is
-    # usually sitting one row away, and the old output never said so.
+
+def _alternatives(seat_rows, zone, party_size):
+    """Rows OUTSIDE the zone that could seat the party, best first.
+
+    The zone is a heuristic; when it comes up short the answer is usually
+    sitting one row away, and the report has to be able to say so.
+    """
     elsewhere = []
     for row in seat_rows:
-        name = row.get("n")
         runs = [r for r in _row_runs(row) if r[2] >= max(1, party_size)]
         if not runs:
             continue
-        in_zone = bool(zone.get(name))
         best = max(runs, key=lambda r: r[2])
-        best_labels = None
-        elsewhere.append(
-            {
-                "row": name,
-                "in_zone": in_zone,
-                "free": sum(r[2] for r in runs),
-                "best_run": best[2],
-                "best_where": _span([best[0], best[1]]) if best[2] > 1 else best[0],
-                # Rows are listed front-first; further back is generally better,
-                # so rank alternatives by depth without pretending it is precise.
-                "depth": seat_rows.index(row) / max(1, len(seat_rows) - 1),
-            }
-        )
+        elsewhere.append({
+            "row": row.get("n"),
+            "in_zone": bool(zone.get(row.get("n"))),
+            "free": sum(r[2] for r in runs),
+            "best_run": best[2],
+            "best_where": _span([best[0], best[1]]) if best[2] > 1 else best[0],
+            # Rows are listed front-first; further back is generally better,
+            # so rank alternatives by depth without pretending it is precise.
+            "depth": seat_rows.index(row) / max(1, len(seat_rows) - 1),
+        })
+    return sorted([r for r in elsewhere if not r["in_zone"]],
+                  key=lambda r: (-min(r["depth"], 0.85), -r["best_run"]))
 
-    alternatives = sorted(
-        [r for r in elsewhere if not r["in_zone"]],
-        key=lambda r: (-min(r["depth"], 0.85), -r["best_run"]),
-    )
+
+def seat_report(token, zone_rows=None, zone_seats=None, want_map=False, party_size=1,
+                auto_widen=None):
+    """Seat availability for one session. Returns (report, error).
+
+    s == 1 is free, s == 2 is taken - verified against the rendered seat map.
+
+    auto_widen: when the zone cannot seat the party but rows outside it can,
+    widen to take in the best of those rows and score again - from the SAME
+    payload, at no extra request. The old behaviour printed an explanation and
+    asked the caller to call back, which meant it had already worked out that
+    its answer was wrong and declined to act on it. `widened_to` names the rows
+    that were added, so a caller can still say the zone was not the default.
+
+    Default None means "widen only a DERIVED zone". An explicit zone_rows is an
+    instruction, not a guess: a standing watch set to the back-centre block
+    wants THOSE seats, and would be actively harmed by an alert fired on a
+    front row it never asked about. Pass True or False to force either way.
+    """
+    try:
+        payload = _post("ticketing/seatlayout", {"encrypted": token})
+    except Blocked as exc:
+        return None, "blocked: %s" % exc
+    except Exception as exc:
+        return None, "seatmap %s" % exc
+
+    if payload.get("status") != 200 or not payload.get("output"):
+        return None, "seatmap unavailable"
+
+    output = payload["output"]
+    seat_rows = [r for r in output.get("rows") or [] if r.get("t") == "seats"]
+    need = max(1, party_size)
+
+    zone = resolve_zone(seat_rows, zone_rows, zone_seats)
+    scored = _score_zone(seat_rows, zone, need)
+    alternatives = _alternatives(seat_rows, zone, need)
+
+    widened_to = []
+    widen = auto_widen if auto_widen is not None else not zone_rows
+    if widen and scored["best_run"] < need:
+        extra = [a["row"] for a in alternatives if a["best_run"] >= need][:3]
+        if extra:
+            # Take each widened row WHOLE rather than re-resolving it. The run
+            # we are widening to is off-centre - that is precisely why the
+            # centre block came up short - so applying the centre-block rule
+            # again to the rows we just added would add the rows and none of
+            # their free seats. Measured: widening into B, G, H at Palazzo
+            # changed zone_free by 0 until this stopped re-restricting them.
+            widened = dict(zone)
+            for row in seat_rows:
+                if row.get("n") not in extra:
+                    continue
+                numbers = set()
+                for seat in row.get("s") or []:
+                    if not seat.get("sn"):
+                        continue
+                    try:
+                        numbers.add(int(seat.get("displaynumber") or 0))
+                    except ValueError:
+                        pass
+                widened[row.get("n")] = numbers
+            zone = widened
+            scored = _score_zone(seat_rows, zone, need)
+            alternatives = _alternatives(seat_rows, zone, need)
+            widened_to = extra
 
     report = {
         "cinema": output.get("cinemaName", ""),
         "when": output.get("showDateTime", ""),
         "experience": output.get("experience", ""),
-        "total": total,
-        "free": free,
-        "zone_total": zone_total,
-        "zone_free": zone_free,
-        "zone_held": zone_held,
-        "status_codes": status_codes,
-        "best_run": best_run,
-        "best_where": best_where,
-        "seats": zone_names[:60],
+        "total": scored["total"],
+        "free": scored["free"],
+        "zone_total": scored["zone_total"],
+        "zone_free": scored["zone_free"],
+        "zone_held": scored["zone_held"],
+        "status_codes": scored["status_codes"],
+        "best_run": scored["best_run"],
+        "best_where": scored["best_where"],
+        "seats": scored["zone_names"][:60],
         # Uncapped, for callers that compare seat sets across runs rather than
         # print them. `seats` stays truncated because it is for display.
-        "zone_free_labels": zone_names,
-        "zone_labels": zone_labels,
-        "all_labels": all_labels,
-        "free_labels": free_labels,
+        "zone_free_labels": scored["zone_names"],
+        "zone_labels": scored["zone_labels"],
+        "all_labels": scored["all_labels"],
+        "free_labels": scored["free_labels"],
         "zone_rows": [r for r in zone if zone[r]],
+        "widened_to": widened_to,
         "rows_seen": [r.get("n") for r in seat_rows],
-        "party_size": party_size,
-        "meets_party_size": best_run >= max(1, party_size),
-        "free_outside_zone": free - zone_free,
+        "party_size": need,
+        "meets_party_size": scored["best_run"] >= need,
+        "free_outside_zone": scored["free"] - scored["zone_free"],
         "alternatives": alternatives[:6],
     }
     if want_map:
-        # Front row first, matching how the cinema's own layout is drawn.
-        report["map"] = ["    " + "SCREEN".center(40)] + picture
+        # Front row first, matching how the cinema\'s own layout is drawn.
+        report["map"] = ["    " + "SCREEN".center(40)] + scored["picture"]
     return report, None
 
 
@@ -1296,6 +1343,11 @@ def describe_seats(report):
         return ""
     booked = 100.0 * (report["total"] - report["free"]) / report["total"]
     context = "%d free in zone, %.0f%% booked overall" % (report["zone_free"], booked)
+    # Say the zone was widened. A caller told "GOOD SEATS" for a block the
+    # default zone would never have offered is owed the fact that the standard
+    # was relaxed to find them.
+    if report.get("widened_to"):
+        context += ", widened into %s" % ",".join(report["widened_to"])
     if not report.get("best_run"):
         return "no good seats (%s)" % context
     if report["best_run"] == 1:

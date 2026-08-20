@@ -1,82 +1,131 @@
 # Backlog
 
-last_updated: 2026-08-10
+last_updated: 2026-08-20
 
-Ranked by value. Everything here came out of a real session on 2026-08-10 —
+Ranked by value. The original seven came out of a real session on 2026-08-10 —
 answering "what English films are running in Chennai", then drilling into
-showtimes and seats at Palazzo and Phoenix. Call counts below are what that
-session actually spent.
+showtimes and seats at Palazzo and Phoenix — plus one found while fixing them.
+
+**All seven are shipped.** The record is below, because the reasoning is worth
+more than the checkmarks. Open work starts at "Still open".
 
 ---
 
-## 1. Return screen, language and variant title from `pvr_seats`
+## Shipped 2026-08-20
 
-`pvr_seats` gives availability but no auditorium and no language, so every
-answer needs a second `pvr_showtimes` call joined on the timestamp. That join
-happened six times in one session.
+### 1. `pvr_seats` returns screen, language and variant title
 
-Add `screen`, `language`, `variant_title` and `format` to each show row in the
-seats response. Halves the calls for the most common question the server gets.
+Was: seats gave availability but no auditorium and no language, so every answer
+needed a second `pvr_showtimes` call joined on the timestamp — six times in one
+session, for the commonest question the server gets.
 
-## 2. `pvr_now_showing(language=...)` filtered on the SCHEDULE
+Now each row carries `screen`, `language`, `language_name`, `variant_id`,
+`variant_title`, `format` and `formats`, and the text output has SCREEN and LNG
+columns. Every field already existed on the show dict; none of it cost a
+request. The join is gone.
 
-"What English films are on in Chennai" took 10 calls: one `now_showing`, one
-`find_shows`, one `cinemas`, then seven per-cinema `pvr_showtimes` sweeps.
+### 2. `pvr_now_showing(language=...)` filtered on the SCHEDULE
 
-The reason is that `now_showing` reports RELEASE languages and its own docstring
-correctly says not to trust them — so there is no cheap path to a filtered
-answer, only an expensive one.
+Was: "what English films are on in Chennai" cost 10 calls — one `now_showing`,
+one `find_shows`, one `cinemas`, then seven per-cinema `pvr_showtimes` sweeps —
+because `now_showing` reports RELEASE languages and its own footer says not to
+trust them. There was no cheap path to a filtered answer, only an expensive one.
 
-Add a `language` parameter that filters on the resolved per-show language.
-A one-call answer to the single most common opening question.
+Now one call. It runs a schedule-only city sweep and returns only films with a
+real showtime in that language, with show and venue counts. Measured on
+2026-08-20: 9 English films, 15 cinemas, 17 upstream calls, one tool call.
 
-## 3. Auto-widen when the zone comes back empty
+### 3. Auto-widen when the zone comes back empty
 
-Palazzo AUDI 5 and Phoenix Screen 1 both returned `0 free in zone` on every IMAX
-show, across two dates. The response then explained how to widen and asked the
-caller to re-call — so it already knows the answer is wrong, it just will not
-act on it.
+Was: Palazzo AUDI 5 and Phoenix Screen 1 returned `0 free in zone` on every IMAX
+show across two dates. The response explained how to widen and asked the caller
+to call again — so it already knew its answer was wrong and would not act on it.
 
-When the zone cannot seat the party, widen automatically and return the next-best
-block labelled as such. Keep the current text as an explanation of what was
-widened, not as an instruction to try again.
+Now `seat_report` widens into the best rows outside the zone and re-scores from
+the SAME payload, at no extra request, reporting `widened_to`. Measured on the
+23 Aug 12:35 PM IMAX show: `0 free, best_run 0` became `46 free, 10 together at
+J1-J10`.
 
-Note the underlying suspicion, worth checking separately: those centre rows may
-be a distinct seat class in premium halls, in which case "0 free" is real and
-frequent, which makes the auto-widen more important, not less.
+Two things this surfaced that the original note did not anticipate:
 
-## 4. `pvr_find_shows` covers only part of the city
+- **Widened rows must be taken WHOLE.** `_alternatives` finds runs across the
+  full row, but `resolve_zone` re-restricts each row to its centre block — the
+  exact part that was sold out. The first implementation widened into B, G, H
+  and changed `zone_free` by zero. Widening now adds the whole row.
+- **An explicit `zone_rows` is an instruction, not a guess.** `auto_widen`
+  defaults to widening only a DERIVED zone. A standing watch pinned to the
+  back-centre block would otherwise start firing at 05:26 for a front row it
+  never asked about; `watch.py` also passes `auto_widen=False` explicitly.
 
-The city-wide search covered 8 of 16 Chennai cinemas and named the 4 it skipped
-(Palazzo, Ampa, Grand Galada, INOX National) — the flagging is right, but a
-city-wide question cannot be answered by a partial sweep, and Palazzo is the
-IMAX house.
+### 4 and 5. Coverage versus seat counting
 
-Either raise the budget for city-wide searches, or add a cheap
-schedule-only mode that skips seat counting and can therefore cover everything.
+Was: a city-wide search covered 8 of 16 Chennai cinemas and skipped Palazzo, the
+IMAX house; everything past the first dozen rows came back `ON_SALE?`. The
+uncounted state was the common case in the broadest tool.
 
-## 5. Most results come back `ON_SALE?` (seats not counted)
+These were one problem. Counting seats costs a request per show, and that is
+what caps coverage, so "which tool is the is-it-bookable tool" is really a
+choice about coverage. `count_seats=True` (default) stays the booking tool.
+`count_seats=False` is the honest other half: schedule only, budget raised to
+cover every cinema in radius, every state openly unverified and a note saying
+so. Measured: 15 cinemas, 0 skipped, 449 shows, 17 calls.
 
-`find_shows` returned `ON_SALE?` for all but the first dozen rows. For a server
-whose whole pitch is "is this actually worth booking", the uncounted state is
-the common case in the broadest tool.
+### 6. Optional pre-rendered markdown output
 
-Tied to #4 — counting is what costs the budget. Decide which tool is the
-"is it bookable" tool and let the other one be schedule-only and honest about it.
+Shipped as `style="markdown"` on `pvr_seats`, non-default, with `format="json"`
+untouched for programmatic callers. Server instructions and tool descriptions
+are advisory — a model paraphrases and reorders them — so returning assembled
+markdown is the only lever that makes format deterministic: format becomes
+data. The time-of-day split and the "good seats free" wording are one user's
+taste, so it is asked for rather than imposed.
+
+### 7. `find_shows` returned nothing for a bare city query
+
+Found while testing the above. With no `lat`/`lng` the origin fell back to the
+city's own published coordinate, and no Chennai cinema is within the 6 km
+default of it — so `find_shows("Chennai", party_size=2)`, the simplest possible
+call, answered `NOTHING_IN_RADIUS`.
+
+Now the radius starts city-wide whenever the caller passed no position, on the
+grounds that someone who gave no coordinates meant the city rather than a point
+in it. The 6 km default survives only for a caller who supplied a real position.
+
+### Also shipped, not from this list
+
+- **Format-aware venue selection.** `find_shows` chose cinemas by distance
+  alone and applied `experience` only to the shows that came back, so an IMAX
+  search could spend its budget on multiplexes while the IMAX house sat one slot
+  outside it — and widening `radius_km` made it worse. `content/cinemas`
+  already carried `screens[].screenType` and `list_cinemas` was discarding it;
+  venues that can run the format are now searched first, demoted never dropped.
+  Chennai's two IMAX screens are 19.8 km and 24.9 km from the centre, so the old
+  6 km default could never reach either.
+- **A global upstream-call ceiling** (`PVR_MAX_CALLS_PER_MIN`, off by default,
+  `/proxy` exempt) so a public instance sheds load as `RATE_LIMITED` rather than
+  getting its shared egress IP blocked for 15 minutes.
+- **Per-call usage logging** (`tool=<name> format=<text|json>`), since the
+  transport only ever logged `CallToolRequest`.
+- **Dead code removed:** `sessions_near`, `_anchor_set`, `ANCHOR_RADIUS_KM` (the
+  multi-cinema endpoint they served ignores the requested date and lags across
+  midnight, which is why `find_shows` never used them), and the single-entry
+  `PROVIDERS` indirection with its vestigial `provider` config key.
 
 ---
 
-## 6. Optional: pre-rendered markdown output
+## Still open
 
-Open question rather than a decision. Server `instructions` and tool
-descriptions are advisory — they shape model behaviour but cannot enforce an
-output format; the model paraphrases, reorders and drops things.
+### 8. Premium halls may need a different zone rule, not a wider one
 
-The one reliable lever is returning the formatted markdown as the payload:
-format becomes data. A `style="markdown"` mode on `pvr_seats` could emit the
-film heading, time-of-day sections and tables already assembled, done
-deterministically in Python.
+Auto-widening treats a short zone as a coverage problem. The underlying
+suspicion from the original #3 is still unchecked: in premium halls the centre
+rows may be a distinct seat CLASS, in which case `0 free` is real and frequent
+rather than a heuristic failure, and widening quietly reframes a sold-out
+premium block as an ordinary one. Worth measuring before trusting the widened
+verdict in IMAX and Luxe houses specifically.
 
-Caveats: keep `format="json"` for programmatic callers, and do not make it the
-default — the time-of-day split and the "good seats free" wording are one
-user's taste, and this is a public server.
+### 9. No per-caller rate limiting
+
+The ceiling is global to the process because Cloud Run reports `0.0.0.0` for
+connector traffic, so callers cannot be told apart. One heavy client can
+therefore exhaust the budget for everyone. Needs a real caller identity before
+it can be fixed.

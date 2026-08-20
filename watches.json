@@ -3,7 +3,6 @@
   {
    "name": "The Odyssey - IMAX - PVR Palazzo",
    "enabled": true,
-   "provider": "pvr",
    "city": "Chennai",
    "cinema_id": "388",
    "cinema_slug": "PVR-Palazzo-The-Nexus-Vijaya-Mall",
@@ -39,7 +38,6 @@
   {
    "name": "The Odyssey - IMAX - Phoenix Velachery",
    "enabled": false,
-   "provider": "pvr",
    "city": "Chennai",
    "cinema_id": "320",
    "cinema_slug": "INOX-Luxe-Phoenix-Market-City,-Velachery--(formerly-Jazz-Cinemas)Chennai",
