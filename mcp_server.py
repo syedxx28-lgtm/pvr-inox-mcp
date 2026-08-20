@@ -117,6 +117,14 @@ Things that matter when answering:
 - Seat names like "D14" are row letter plus number. "4 together at D14-D17"
   means genuinely adjacent, with aisles treated as breaks.
 
+- BEING TOLD WHEN A WINDOW OPENS is the watcher's job, not this server's. This
+  server only answers questions asked of it; it stores nothing and polls
+  nothing on anyone's behalf, and MCP has no way to reach a client that is not
+  connected. So when someone wants to be alerted the moment booking opens, or
+  the moment held-back rows are released, use pvr_compose_watch. It builds a
+  ready-to-paste config and the steps to run it from their own fork. Say
+  plainly that nothing is watching yet - never imply a watch now exists.
+
 You can also manage the cron watches that alert Slack when a booking window
 opens: pvr_add_watch / pvr_list_watches / pvr_remove_watch.
 
@@ -1014,6 +1022,137 @@ def pvr_list_watches() -> str:
     return "\n".join(lines)
 
 
+def _resolve_venue(city, cinema):
+    """(venue, error). A name fragment becomes one cinema, or says why not."""
+    matches = core.list_cinemas(city, query=cinema)
+    if not matches:
+        return None, "No cinema matching %r in %s. Try pvr_cinemas to see the list." % (
+            cinema, city)
+    if len(matches) > 1:
+        listing = "\n".join("  %s  %s" % (m["cinema_id"], m["name"]) for m in matches[:8])
+        return None, "%r matches %d cinemas in %s - be more specific:\n%s" % (
+            cinema, len(matches), city, listing)
+    return matches[0], None
+
+
+def _build_watch(name, venue, city, film, experience="", language="", weekdays="",
+                 party_size=1, horizon_days=16, zone_rows="", zone_seats="",
+                 min_lead_minutes=0):
+    """(watch_dict, error). One definition, so composing and adding cannot drift.
+
+    zone_rows / zone_seats are left OUT when empty rather than written as
+    blanks: an absent zone derives itself from the auditorium's own geometry,
+    which travels between cinemas, while a hardcoded row list does not.
+    """
+    watch = {
+        "name": name,
+        "enabled": True,
+        "city": city,
+        "cinema_id": venue["cinema_id"],
+        "cinema_slug": venue["name"].replace(" ", "-"),
+        "lat": venue["lat"],
+        "lng": venue["lng"],
+        "film_contains": film.upper(),
+        "horizon_days": horizon_days,
+        "alert_on_restock": True,
+        "seat_detail": True,
+        # BOTH, deliberately. party_size decides whether a block can seat the
+        # party; min_adjacent is a separate threshold that gates the
+        # `seats_freed` alert (watch.py reads it directly and does NOT fall
+        # back to party_size, so omitting it leaves need=0 and that alert -
+        # the one worth waking for - silently never fires).
+        "party_size": max(1, party_size),
+        "min_adjacent": max(1, party_size),
+    }
+    if experience:
+        watch["experience"] = experience
+    if language:
+        watch["language"] = language
+    if weekdays:
+        watch["weekdays"] = [d.strip().title()[:3] for d in weekdays.split(",") if d.strip()]
+    if min_lead_minutes:
+        watch["min_lead_minutes"] = min_lead_minutes
+    if zone_rows:
+        watch["zone_rows"] = [r.strip().upper() for r in zone_rows.split(",") if r.strip()]
+    if zone_seats:
+        try:
+            lo, hi = zone_seats.replace("-", " ").split()
+            watch["zone_seats"] = [int(lo), int(hi)]
+        except ValueError:
+            return None, "zone_seats should look like '11-21'."
+    return watch, None
+
+
+@lookup
+def pvr_compose_watch(
+    name: str,
+    city: str,
+    cinema: str,
+    film: str,
+    party_size: int = 2,
+    experience: str = "",
+    language: str = "",
+    weekdays: str = "",
+    horizon_days: int = 16,
+    min_lead_minutes: int = 0,
+    zone_rows: str = "",
+    zone_seats: str = "",
+    format: str = "text",
+) -> str:
+    """Build a ready-to-paste watch config, for running the watcher yourself.
+
+    THIS WRITES NOTHING AND WATCHES NOTHING. It resolves the cinema id and
+    coordinates from a name fragment, assembles the config block, and hands it
+    back with the three steps to make it live in your own copy. This server
+    keeps no state and runs no cron on your behalf, so say that plainly rather
+    than implying a watch now exists.
+
+    Use it when someone wants to be told the moment a booking window opens, or
+    the moment held-back rows are released. The watcher is the only part that
+    can do that, and it runs from your fork, not from here.
+
+    `cinema` is a name fragment ("Palazzo", "Phoenix"). `film` is a
+    case-insensitive substring. `weekdays` like "Sat,Sun" limits it to days
+    worth going. Leave zone_rows / zone_seats empty so the good-seats zone
+    derives itself from that auditorium's geometry, which is what you want
+    unless you have measured the hall yourself.
+    """
+    venue, err = _resolve_venue(city, cinema)
+    if err:
+        return _err("CINEMA_NOT_FOUND", err)
+
+    watch, err = _build_watch(
+        name, venue, city, film, experience, language, weekdays,
+        party_size, horizon_days, zone_rows, zone_seats, min_lead_minutes)
+    if err:
+        return _err("BAD_ARGUMENT", err)
+
+    block = json.dumps(watch, indent=1)
+    payload = {"watch": watch, "cinema": venue["name"], "writes_anything": False}
+
+    text = "\n".join([
+        "Watch config for %r at %s." % (name, venue["name"]),
+        "Nothing is watching yet. This server stored nothing and polls nothing for you.",
+        "",
+        "1. Fork https://github.com/notprashanth/pvr-inox-mcp",
+        "2. Add this block to the \"watches\" list in watches.json:",
+        "",
+        block,
+        "",
+        "3. Set one repo secret, NTFY_TOPIC, to any string you invent, then",
+        "   subscribe to it in the ntfy app. Anyone who knows the topic gets the",
+        "   alerts, so make it unguessable. Telegram, Slack, Pushover, email and a",
+        "   generic webhook work too, see the README.",
+        "4. Actions tab, \"pvr-inox watch\", Run workflow once to record the baseline.",
+        "   The first run is silent on purpose, or every open date would fire.",
+        "",
+        "The zone is not in the block above because an absent zone derives itself",
+        "from this auditorium's geometry. Row letters mean different things in",
+        "different houses, so a hardcoded list does not travel.",
+    ])
+    return _out(payload, text, format)
+
+
 @local_only(annotations=_WRITES)
 def pvr_add_watch(
     name: str,
@@ -1039,54 +1178,19 @@ def pvr_add_watch(
 
     The watch is written locally and is NOT live until published.
     """
-    matches = core.list_cinemas(city, query=cinema)
-    if not matches:
-        return "No cinema matching %r in %s. Try pvr_cinemas to see the list." % (
-            cinema,
-            city,
-        )
-    if len(matches) > 1:
-        listing = "\n".join("  %s  %s" % (m["cinema_id"], m["name"]) for m in matches[:8])
-        return "%r matches %d cinemas in %s - be more specific:\n%s" % (
-            cinema,
-            len(matches),
-            city,
-            listing,
-        )
-    venue = matches[0]
+    venue, err = _resolve_venue(city, cinema)
+    if err:
+        return err
 
     config = _load_watches()
     if any(w.get("name") == name for w in config.get("watches") or []):
         return "A watch named %r already exists. Remove it first, or pick another name." % name
 
-    watch = {
-        "name": name,
-        "enabled": True,
-        "city": city,
-        "cinema_id": venue["cinema_id"],
-        "cinema_slug": venue["name"].replace(" ", "-"),
-        "lat": venue["lat"],
-        "lng": venue["lng"],
-        "film_contains": film.upper(),
-        "horizon_days": horizon_days,
-        "alert_on_restock": True,
-        "seat_detail": True,
-        "min_adjacent": min_adjacent,
-    }
-    if experience:
-        watch["experience"] = experience
-    if language:
-        watch["language"] = language
-    if weekdays:
-        watch["weekdays"] = [d.strip().title()[:3] for d in weekdays.split(",") if d.strip()]
-    if zone_rows:
-        watch["zone_rows"] = [r.strip().upper() for r in zone_rows.split(",") if r.strip()]
-    if zone_seats:
-        try:
-            lo, hi = zone_seats.replace("-", " ").split()
-            watch["zone_seats"] = [int(lo), int(hi)]
-        except ValueError:
-            return "zone_seats should look like '11-21'."
+    watch, err = _build_watch(
+        name, venue, city, film, experience, language, weekdays,
+        min_adjacent, horizon_days, zone_rows, zone_seats)
+    if err:
+        return err
 
     config.setdefault("watches", []).append(watch)
     _save_watches(config)
