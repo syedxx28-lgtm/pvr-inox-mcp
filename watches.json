@@ -1,23 +1,19 @@
 {
- "watches": [
-  {
-   "name": "Bethlehem Kudumba Unit - PVR Palazzo",
-   "enabled": true,
-   "city": "Chennai",
-   "cinema_id": "388",
-   "cinema_slug": "PVR-Palazzo-The-Nexus-Vijaya-Mall",
-   "lat": "13.05053777",
-   "lng": "80.2093132",
-   "film_contains": "BETHLEHEM",
-   "experience": "",
-   "language": "Malayalam",
-   "horizon_days": 1,
-   "weekdays": ["Fri"],
-   "alert_on_restock": true,
-   "seat_detail": true,
-   "zone_rows": ["A","B","C","D"],
-   "zone_seats": [1,50],
-   "min_adjacent": 2
-  }
- ]
+  "watches": [
+    {
+      "name": "Bethlehem Kudumba Unit - PVR Palazzo",
+      "enabled": true,
+      "city": "Chennai",
+      "cinema_id": "388",
+      "cinema_slug": "PVR-Palazzo-The-Nexus-Vijaya-Mall",
+      "lat": "13.05053777",
+      "lng": "80.2093132",
+      "film_contains": "BETHLEHEM KUDUMBA UNIT",
+      "horizon_days": 7,
+      "alert_on_restock": true,
+      "seat_detail": true,
+      "party_size": 2,
+      "min_adjacent": 2
+    }
+  ]
 }
